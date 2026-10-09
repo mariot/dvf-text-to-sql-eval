@@ -1,0 +1,183 @@
+# Independent second queries for the hardest gold answers.
+#
+# Each query reads ONLY the raw table dvf.mutations (never the semantic layer
+# dvf.ventes / dvf.biens) and uses a different method: count(DISTINCT ...),
+# DISTINCT ON, a different deduplication, geodesic distances on raw
+# longitude/latitude instead of Lambert-93. It must return the same columns
+# as the gold query. check_gold.py compares the two results, with rel_tol
+# when the methods legitimately differ at the margin (documented in `why`).
+
+checks:
+  # ---- duplication trap --------------------------------------------------------
+  - id: sim-01
+    why: "count(DISTINCT id_mutation) on raw rows instead of one row per mutation"
+    sql: |
+      SELECT count(DISTINCT id_mutation) FROM dvf.mutations
+      WHERE code_departement = '33' AND annee = 2024
+        AND nature_mutation NOT IN ('Echange', 'Expropriation');
+
+  - id: sim-03
+    why: "keep only the first nature de culture of each parcel instead of max-count dedupe"
+    sql: |
+      SELECT count(*) FROM (
+        SELECT code_type_local,
+               dense_rank() OVER (PARTITION BY id_mutation, id_parcelle
+                                  ORDER BY coalesce(code_nature_culture, ''),
+                                           coalesce(code_nature_culture_speciale, '')) AS rk
+        FROM dvf.mutations
+        WHERE code_commune = '33281' AND annee = 2024
+          AND nature_mutation NOT IN ('Echange', 'Expropriation')
+      ) t
+      WHERE code_type_local = 1 AND rk = 1;
+
+  - id: agg-08
+    why: "DISTINCT ON (id_mutation) before summing (naive SUM over rows is 8.3x larger)"
+    sql: |
+      SELECT sum(valeur_fonciere) FROM (
+        SELECT DISTINCT ON (id_mutation) valeur_fonciere FROM dvf.mutations
+        WHERE code_departement = '33' AND annee = 2024
+          AND nature_mutation NOT IN ('Echange', 'Expropriation')
+      ) t;
+
+  - id: dq-08
+    why: "count(DISTINCT id_mutation) on raw rows"
+    sql: |
+      SELECT count(DISTINCT id_mutation) FROM dvf.mutations
+      WHERE code_commune = '33063' AND annee = 2024 AND valeur_fonciere IS NULL;
+
+  - id: dq-09
+    why: "DISTINCT ON (id_mutation) on raw rows"
+    sql: |
+      SELECT count(*) FROM (
+        SELECT DISTINCT ON (id_mutation) valeur_fonciere FROM dvf.mutations
+        WHERE code_departement = '33' AND annee = 2024
+          AND nature_mutation NOT IN ('Echange', 'Expropriation')
+      ) t
+      WHERE valeur_fonciere < 1000;
+
+  - id: tmp-13
+    why: "raw distinct counts per year, then LAG"
+    sql: |
+      SELECT annee, n,
+             round(100.0 * (n - lag(n) OVER (ORDER BY annee)) / lag(n) OVER (ORDER BY annee), 1)
+      FROM (SELECT annee, count(DISTINCT id_mutation) AS n FROM dvf.mutations
+            WHERE code_departement = '33' AND nature_mutation NOT IN ('Echange', 'Expropriation')
+            GROUP BY annee) t
+      ORDER BY annee;
+
+  # ---- spatial ------------------------------------------------------------------
+  - id: spa-01
+    why: "geodesic geography distance on raw rows, first-culture dedupe"
+    sql: |
+      SELECT count(*) FROM (
+        SELECT dense_rank() OVER (PARTITION BY id_mutation, id_parcelle
+                                  ORDER BY coalesce(code_nature_culture, '')) AS rk,
+               code_type_local, geom
+        FROM dvf.mutations
+        WHERE annee = 2024 AND nature_mutation NOT IN ('Echange', 'Expropriation')
+      ) t
+      WHERE rk = 1 AND code_type_local = 2
+        AND ST_DWithin(geom::geography, ST_Point(-0.5700, 44.8412, 4326)::geography, 500);
+
+  - id: spa-05
+    why: "geodesic, any row of the mutation within 5 km; Lambert-93 boundary effect < 0.1%"
+    rel_tol: 0.001
+    sql: |
+      SELECT count(DISTINCT id_mutation) FROM dvf.mutations
+      WHERE code_departement = '33' AND annee >= 2023
+        AND nature_mutation NOT IN ('Echange', 'Expropriation')
+        AND ST_DWithin(geom::geography, ST_Point(-0.56950, 44.84125, 4326)::geography, 5000);
+
+  - id: spa-07
+    why: "mutations whose rows ALL lack geom, on raw rows"
+    sql: |
+      SELECT count(*) FROM (
+        SELECT id_mutation FROM dvf.mutations
+        WHERE code_departement = '33' AND annee = 2024
+          AND nature_mutation NOT IN ('Echange', 'Expropriation')
+        GROUP BY id_mutation HAVING bool_and(geom IS NULL)
+      ) t;
+
+  - id: spa-10
+    why: "ST_MakeEnvelope && on raw WGS84 geom instead of lon/lat BETWEEN"
+    sql: |
+      SELECT count(DISTINCT m.id_mutation) FROM dvf.mutations m
+      WHERE m.annee = 2024 AND m.code_departement = '33' AND m.code_type_local = 1
+        AND m.nature_mutation NOT IN ('Echange', 'Expropriation')
+        AND m.geom && ST_MakeEnvelope(-0.60, 44.83, -0.55, 44.86, 4326)
+        AND NOT EXISTS (SELECT 1 FROM dvf.mutations o
+                        WHERE o.id_mutation = m.id_mutation AND o.code_type_local IN (2, 4));
+
+  - id: spa-11
+    why: "geodesic distance to the airport point on raw rows, first-culture dedupe"
+    rel_tol: 0.05
+    sql: |
+      SELECT count(*) FROM (
+        SELECT dense_rank() OVER (PARTITION BY id_mutation, id_parcelle
+                                  ORDER BY coalesce(code_nature_culture, '')) AS rk,
+               code_type_local, geom
+        FROM dvf.mutations
+        WHERE annee = 2024 AND code_departement = '33'
+          AND nature_mutation NOT IN ('Echange', 'Expropriation')
+      ) t
+      WHERE rk = 1 AND code_type_local = 1
+        AND ST_DWithin(geom::geography, ST_Point(-0.71556, 44.82833, 4326)::geography, 3000);
+
+  - id: spa-12
+    why: "geodesic distances on raw rows, DISTINCT dedupe"
+    sql: |
+      SELECT round((percentile_cont(0.5) WITHIN GROUP (
+                 ORDER BY ST_Distance(geom::geography, ST_Point(-0.56950, 44.84125, 4326)::geography)) / 1000)::numeric, 2)
+      FROM (SELECT DISTINCT id_mutation, id_parcelle, surface_reelle_bati, nombre_pieces_principales, geom
+            FROM dvf.mutations
+            WHERE code_commune = '33281' AND annee = 2024 AND code_type_local = 1
+              AND nature_mutation NOT IN ('Echange', 'Expropriation') AND geom IS NOT NULL) h;
+
+  # ---- multi-step ---------------------------------------------------------------
+  - id: mul-01
+    why: "raw distinct counts with a FILTER instead of the semantic layer"
+    sql: |
+      SELECT round(100.0 * count(DISTINCT id_mutation) FILTER (WHERE code_commune = '33063')
+                   / count(DISTINCT id_mutation), 1)
+      FROM dvf.mutations
+      WHERE code_departement = '33' AND annee = 2024
+        AND nature_mutation NOT IN ('Echange', 'Expropriation');
+
+  - id: mul-04
+    why: "single-house sales rebuilt from raw rows with DISTINCT (identical lots collapse)"
+    rel_tol: 0.02
+    sql: |
+      WITH s AS (
+        SELECT id_mutation, max(valeur_fonciere) AS v,
+               count(DISTINCT (id_parcelle, surface_reelle_bati, nombre_pieces_principales, lot1_numero))
+                 FILTER (WHERE code_type_local IN (1, 2)) AS n12,
+               bool_or(code_type_local = 1) AS has_house, bool_or(code_type_local = 4) AS has_local
+        FROM dvf.mutations
+        WHERE code_commune = '33281' AND annee = 2024
+          AND nature_mutation IN ('Vente', 'Vente en l''état futur d''achèvement')
+        GROUP BY id_mutation
+      )
+      SELECT round(100.0 * count(*) FILTER (WHERE v > 400000) / count(*), 1)
+      FROM s WHERE n12 = 1 AND has_house AND NOT has_local AND v > 0;
+
+  - id: mul-05
+    why: "single-apartment sales rebuilt from raw rows with DISTINCT, then CASE buckets"
+    rel_tol: 0.02
+    sql: |
+      WITH s AS (
+        SELECT id_mutation, max(valeur_fonciere) AS v,
+               count(DISTINCT (id_parcelle, surface_reelle_bati, nombre_pieces_principales, lot1_numero))
+                 FILTER (WHERE code_type_local IN (1, 2)) AS n12,
+               bool_or(code_type_local = 2) AS has_flat, bool_or(code_type_local = 4) AS has_local,
+               max(surface_reelle_bati) FILTER (WHERE code_type_local = 2) AS surface,
+               max(nombre_pieces_principales) FILTER (WHERE code_type_local = 2) AS pieces
+        FROM dvf.mutations
+        WHERE code_commune = '33063' AND annee = 2024
+          AND nature_mutation IN ('Vente', 'Vente en l''état futur d''achèvement')
+        GROUP BY id_mutation
+      )
+      SELECT CASE WHEN pieces >= 5 THEN '5+' ELSE pieces::text END,
+             count(*), round(percentile_cont(0.5) WITHIN GROUP (ORDER BY v / surface))
+      FROM s
+      WHERE n12 = 1 AND has_flat AND NOT has_local AND v > 0 AND surface > 0 AND pieces >= 1
+      GROUP BY 1 ORDER BY 1;
