@@ -181,3 +181,25 @@ checks:
       FROM s
       WHERE n12 = 1 AND has_flat AND NOT has_local AND v > 0 AND surface > 0 AND pieces >= 1
       GROUP BY 1 ORDER BY 1;
+
+  - id: mul-06
+    why: "single-property sales rebuilt from raw rows with DISTINCT (two identical flats in one deed collapse into one, so a few more sales qualify)"
+    rel_tol: 0.03
+    sql: |
+      WITH mono AS (
+        SELECT id_mutation, min(date_mutation) AS d
+        FROM dvf.mutations
+        WHERE code_departement = '33' AND nature_mutation NOT IN ('Echange', 'Expropriation')
+        GROUP BY id_mutation
+        HAVING count(DISTINCT (id_parcelle, code_type_local, surface_reelle_bati, nombre_pieces_principales, lot1_numero))
+                 FILTER (WHERE code_type_local IN (1, 2)) = 1
+           AND NOT bool_or(coalesce(code_type_local, 0) = 4)
+      ),
+      k AS (
+        SELECT DISTINCT m.id_parcelle, m.code_type_local, m.surface_reelle_bati, m.nombre_pieces_principales,
+               coalesce(m.lot1_numero, '') AS lot, mono.d
+        FROM dvf.mutations m JOIN mono USING (id_mutation)
+        WHERE m.code_type_local IN (1, 2) AND m.surface_reelle_bati > 0
+      )
+      SELECT count(*) FILTER (WHERE n >= 2), count(*) FILTER (WHERE n >= 3)
+      FROM (SELECT count(DISTINCT d) AS n FROM k GROUP BY id_parcelle, code_type_local, surface_reelle_bati, nombre_pieces_principales, lot) t;

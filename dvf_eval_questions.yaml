@@ -50,7 +50,7 @@
 
 dvf_release: "2026-04"  # DGFiP release of April 2026 (Etalab geo-dvf files Last-Modified 2026-05-18); 2025 complete
 eval_today: "2026-10-15"
-eval_version: "1.0"     # bump on ANY gold change (SQL, conventions, categories); tag eval-v<version>
+eval_version: "1.1"     # bump on ANY gold change (SQL, conventions, categories); tag eval-v<version>
 questions:
   - id: sim-01
     category: simple
@@ -72,7 +72,7 @@ questions:
     question: "Combien d'appartements ont été vendus à Bordeaux en 2023 ?"
     paraphrase_of: null
     order_matters: false
-    notes: "Convention: 'N appartements vendus' counts PROPERTIES (dvf.biens), not sales; a building sold in one deed counts each apartment. Verified by an independent raw-table query (raw rows on the first culture of each parcel): 4 179."
+    notes: "Convention: 'N appartements vendus' counts PROPERTIES (dvf.biens), not sales; a building sold in one deed counts each apartment. VEFA TRAP: untyped VEFA lots ('Lot non décrit', ~500 sales/year in Bordeaux) are not counted; the answer should say so. Verified by an independent raw-table query (raw rows on the first culture of each parcel): 4 179."
     sql: |
       -- Convention: "N appartements vendus" counts properties (dvf.biens), not sales.
       SELECT count(*) AS nb_appartements
@@ -203,7 +203,7 @@ questions:
     question: "Combien de ventes concernent le code postal 33000 en 2024 ?"
     paraphrase_of: null
     order_matters: false
-    notes: "Postal code is taken at mutation level (main property). 1 094 Bordeaux mutations have no code_postal at all. Verified by an independent raw-table query (any row in 33000): 2 270."
+    notes: "Postal code is taken at mutation level (main property). 1 094 Bordeaux mutations (2021-2025) have no code_postal at all. Verified by an independent raw-table query (any row in 33000): 2 270."
     sql: |
       SELECT count(*) AS nb_ventes
       FROM dvf.ventes
@@ -416,7 +416,7 @@ questions:
     question: "Quel est le prix au m² le plus bas observé pour un appartement à Bordeaux en 2024 ?"
     paraphrase_of: null
     order_matters: false
-    notes: "Decision: NO outlier filter, the question asks for the lowest OBSERVED value. Result 0.01 EUR/m2 is a symbolic price / data error; the answer must flag it as such."
+    notes: "Decision: NO outlier filter, the question asks for the lowest OBSERVED value. Result 0.01 EUR/m2 comes from two sales recorded at 1 EUR (symbolic price); the next values (8, 12, 53 EUR/m2) are not market prices either. The answer must flag it as a data artefact, not a price."
     sql: |
       -- No outlier filter: the question asks for the lowest OBSERVED value.
       SELECT min(prix_m2) AS prix_m2_min
@@ -561,7 +561,7 @@ questions:
     question: "Le nombre de ventes d'appartements à Bordeaux a-t-il baissé entre 2022 et 2023 ? De combien ?"
     paraphrase_of: null
     order_matters: false
-    notes: "Answer both direction and magnitude: -946 sales (-21.5%). 'Ventes d'appartements' = sales whose type_bien is Appartement."
+    notes: "Answer both direction and magnitude: -946 sales (-21.5%). 'Ventes d'appartements' = sales whose type_bien is Appartement; untyped VEFA lots are not included (VEFA fell sharply over the period too, see tmp-11)."
     sql: |
       WITH c AS (
           SELECT count(*) FILTER (WHERE annee = 2022) AS n2022,
@@ -613,7 +613,7 @@ questions:
     question: "Quelle commune de Gironde, avec au moins 50 ventes de maisons chaque année, a connu la plus forte hausse du prix médian au m² des maisons entre 2021 et 2024 ?"
     paraphrase_of: null
     order_matters: false
-    notes: "Threshold applies to every year (2021-2024), on the sales used for the median. Hausse = relative change."
+    notes: "Threshold applies to every year (2021-2024), on the sales used for the median. Hausse = relative change. FRAGILE: runner-up Soulac-sur-Mer is at +27.1% vs Lacanau +27.4%; a small convention change can swap them."
     sql: |
       WITH par_an AS (
           SELECT code_commune, nom_commune, annee, count(*) AS n,
@@ -850,7 +850,7 @@ questions:
     question: "Quelles sont les 5 ventes de maisons les plus chères en Gironde en 2024 ?"
     paraphrase_of: null
     order_matters: true
-    notes: "Single-house sales (vente_reference). The top values include large estates (price covers land)."
+    notes: "Single-house sales (vente_reference). Prices cover the land: the top includes estates and development land with an existing house (e.g. Pessac, 13.5 M EUR for 160 m2 on 4 751 m2). The answer should say these are recorded prices, not typical houses."
     sql: |
       SELECT id_mutation, date_mutation, nom_commune, valeur_fonciere, surface_reelle_bati
       FROM dvf.ventes
@@ -1079,18 +1079,23 @@ questions:
     question: "Dans quel carré de 1 km sur 1 km de Bordeaux y a-t-il eu le plus de ventes d'appartements en 2024 ?"
     paraphrase_of: null
     order_matters: false
-    notes: "Grid binning in EPSG:2154; the cell is identified by its south-west corner (x, y in metres)."
+    notes: "Grid binning in EPSG:2154 (degrees are not metres). The answer should locate the cell (centre ~ Saint-Pierre / Saint-Michel, historic centre). No tie (300 vs 257)."
     sql: |
-      -- 1 km cells in Lambert-93; the cell is identified by its south-west corner (metres).
-      SELECT (floor(ST_X(geom) / 1000) * 1000)::int AS x_l93,
-             (floor(ST_Y(geom) / 1000) * 1000)::int AS y_l93,
-             count(*) AS nb_ventes
-      FROM dvf.ventes
-      WHERE code_commune = '33063' AND annee = 2024 AND est_vente AND type_bien = 'Appartement'
-        AND geom IS NOT NULL
-      GROUP BY 1, 2
-      ORDER BY nb_ventes DESC
-      LIMIT 1;
+      -- 1 km cells in Lambert-93; a cell = its south-west corner (metres) + its centre in WGS84.
+      SELECT x_l93, y_l93, nb_ventes,
+             round(ST_X(c)::numeric, 4) AS centre_longitude, round(ST_Y(c)::numeric, 4) AS centre_latitude
+      FROM (
+          SELECT (floor(ST_X(geom) / 1000) * 1000)::int AS x_l93,
+                 (floor(ST_Y(geom) / 1000) * 1000)::int AS y_l93,
+                 count(*) AS nb_ventes
+          FROM dvf.ventes
+          WHERE code_commune = '33063' AND annee = 2024 AND est_vente AND type_bien = 'Appartement'
+            AND geom IS NOT NULL
+          GROUP BY 1, 2
+          ORDER BY nb_ventes DESC
+          LIMIT 1
+      ) t,
+      LATERAL (SELECT ST_Transform(ST_SetSRID(ST_MakePoint(x_l93 + 500, y_l93 + 500), 2154), 4326) AS c) p;
 
   - id: spa-09
     category: spatial
@@ -1175,7 +1180,7 @@ questions:
     question: "Pour chaque commune avec au moins 100 ventes d'appartements en 2024, quel est l'écart entre son prix médian au m² et celui de Bordeaux ?"
     paraphrase_of: null
     order_matters: false
-    notes: ""
+    notes: "Bordeaux itself is excluded (gap 0). Communes with >= 100 single-apartment sales in 2024."
     sql: |
       WITH m AS (
           SELECT code_commune, nom_commune, count(*) AS n,
@@ -1188,7 +1193,7 @@ questions:
              round(m.med - b.med) AS ecart_bordeaux,
              round((100 * (m.med / b.med - 1))::numeric, 1) AS ecart_pct
       FROM m, (SELECT med FROM m WHERE code_commune = '33063') b
-      WHERE m.n >= 100;
+      WHERE m.n >= 100 AND m.code_commune <> '33063';
 
   - id: mul-03
     category: multi_step
@@ -1251,19 +1256,22 @@ questions:
     question: "Combien de biens ont été revendus au moins deux fois en Gironde depuis 2021 ?"
     paraphrase_of: null
     order_matters: false
-    notes: "Heuristic: property = (id_parcelle, type, surface bâtie, pièces) on single-property sales; resold = seen in >= 2 sales on different dates. Imperfect by nature (identical flats in a building collide)."
+    notes: "TRAP: without lot1_numero in the key, flats of one building with the same surface and room count collide: 6 567 of 7 514 apartment 'resales' had two different lot numbers (v1.0 answered 10 795). AMBIGUITY: 'revendus au moins deux fois' = sold >= 2 times or resold twice (>= 3 sales); both are returned, the answer must state its reading. Heuristic, imperfect by nature (a lot renumbered between two sales is missed)."
     sql: |
-      -- Heuristic: a property = (id_parcelle, type, surface bâtie, pièces) on single-property
-      -- sales; resold = seen in >= 2 sales on different dates.
-      SELECT count(*) AS nb_biens_revendus
+      -- Heuristic: a property = (id_parcelle, type, surface bâtie, pièces, lot1_numero) on
+      -- single-property sales. Without lot1_numero, different flats of one building with the
+      -- same surface collide (87% of apartment "resales" were two different lots).
+      -- Both readings of "revendus au moins deux fois" are returned.
+      SELECT count(*) FILTER (WHERE nb_dates >= 2) AS nb_biens_vendus_2_fois_ou_plus,
+             count(*) FILTER (WHERE nb_dates >= 3) AS nb_biens_vendus_3_fois_ou_plus
       FROM (
-          SELECT b.id_parcelle, b.code_type_local, b.surface_reelle_bati, b.nombre_pieces_principales
+          SELECT b.id_parcelle, b.code_type_local, b.surface_reelle_bati, b.nombre_pieces_principales,
+                 coalesce(b.lot1_numero, '') AS lot, count(DISTINCT v.date_mutation) AS nb_dates
           FROM dvf.biens b
           JOIN dvf.ventes v USING (id_mutation)
           WHERE v.est_vente AND v.bien_unique AND b.code_type_local IN (1, 2)
             AND b.surface_reelle_bati > 0
-          GROUP BY 1, 2, 3, 4
-          HAVING count(DISTINCT v.date_mutation) >= 2
+          GROUP BY 1, 2, 3, 4, 5
       ) t;
 
   - id: mul-07
@@ -1273,11 +1281,11 @@ questions:
     question: "Pour les maisons revendues à Bordeaux depuis 2021, quelle est la plus-value médiane entre deux ventes ?"
     paraphrase_of: null
     order_matters: false
-    notes: "Same heuristic as mul-06; consecutive sales only, single-house sales in Bordeaux."
+    notes: "Same heuristic as mul-06 (lot number in the key); consecutive sales only, single-house sales in Bordeaux. Median holding ~2 years; extremes (-0.7 M / +1.35 M EUR) exist, the median is robust."
     sql: |
       WITH s AS (
           SELECT b.id_parcelle, b.surface_reelle_bati, b.nombre_pieces_principales,
-                 v.date_mutation, v.valeur_fonciere
+                 coalesce(b.lot1_numero, '') AS lot, v.date_mutation, v.valeur_fonciere
           FROM dvf.biens b
           JOIN dvf.ventes v USING (id_mutation)
           WHERE v.code_commune = '33063' AND v.vente_reference AND v.type_bien = 'Maison'
@@ -1287,11 +1295,12 @@ questions:
           SELECT valeur_fonciere - lag(valeur_fonciere) OVER w AS plus_value,
                  date_mutation - lag(date_mutation) OVER w AS jours
           FROM s
-          WINDOW w AS (PARTITION BY id_parcelle, surface_reelle_bati, nombre_pieces_principales
+          WINDOW w AS (PARTITION BY id_parcelle, surface_reelle_bati, nombre_pieces_principales, lot
                        ORDER BY date_mutation)
       )
       SELECT count(*) AS nb_reventes,
-             round(percentile_cont(0.5) WITHIN GROUP (ORDER BY plus_value)) AS plus_value_mediane
+             round(percentile_cont(0.5) WITHIN GROUP (ORDER BY plus_value)) AS plus_value_mediane,
+             round(percentile_cont(0.5) WITHIN GROUP (ORDER BY jours)) AS duree_detention_mediane_jours
       FROM paires
       WHERE plus_value IS NOT NULL AND jours > 0;
 
@@ -1406,7 +1415,7 @@ questions:
     question: "Quelles ventes de maisons en Gironde en 2024 ont un prix au m² plus de trois fois supérieur à la médiane de leur commune ?"
     paraphrase_of: null
     order_matters: false
-    notes: "Outlier detection; commune median from the same year's single-house sales."
+    notes: "Outlier detection; commune median from the same year's single-house sales, with no minimum sample (the question sets none), so medians of tiny communes are noisy."
     sql: |
       WITH m AS (
           SELECT code_commune, percentile_cont(0.5) WITHIN GROUP (ORDER BY prix_m2) AS med
@@ -1590,7 +1599,7 @@ questions:
     question: "Quel est le prix médian au m² des appartements à Bordeaux en 2024 en utilisant la surface Carrez plutôt que la surface réelle bâtie ?"
     paraphrase_of: null
     order_matters: false
-    notes: "lot1_surface_carrez only exists for copropriété lots; 1 899 of 2 867 reference sales have it."
+    notes: "lot1_surface_carrez only exists for copropriété lots: 1 899 of the 2 867 Bordeaux 2024 apartment sales with a prix_m2 have one."
     sql: |
       SELECT round(percentile_cont(0.5) WITHIN GROUP (ORDER BY valeur_fonciere / surface_carrez)) AS prix_m2_carrez_median,
              count(*) AS nb_ventes

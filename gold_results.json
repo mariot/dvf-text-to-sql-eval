@@ -1,5 +1,5 @@
 {
- "eval_version": "1.0",
+ "eval_version": "1.1",
  "dvf_release": "2026-04",
  "results": {
   "agg-01": {
@@ -324,13 +324,6 @@
      3160.0,
      -1058.0,
      -25.1
-    ],
-    [
-     "Bordeaux",
-     2867,
-     4217.0,
-     0.0,
-     0.0
     ],
     [
      "Le Bouscat",
@@ -825,23 +818,27 @@
   },
   "mul-06": {
    "columns": [
-    "nb_biens_revendus"
+    "nb_biens_vendus_2_fois_ou_plus",
+    "nb_biens_vendus_3_fois_ou_plus"
    ],
    "rows": [
     [
-     10795
+     4929,
+     119
     ]
    ]
   },
   "mul-07": {
    "columns": [
     "nb_reventes",
-    "plus_value_mediane"
+    "plus_value_mediane",
+    "duree_detention_mediane_jours"
    ],
    "rows": [
     [
-     268,
-     41268.0
+     227,
+     52000.0,
+     736.0
     ]
    ]
   },
@@ -2684,13 +2681,17 @@
    "columns": [
     "x_l93",
     "y_l93",
-    "nb_ventes"
+    "nb_ventes",
+    "centre_longitude",
+    "centre_latitude"
    ],
    "rows": [
     [
      417000,
      6421000,
-     300
+     300,
+     -0.5758,
+     44.8351
     ]
    ]
   },
