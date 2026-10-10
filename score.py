@@ -331,6 +331,11 @@ def summarize(spec: dict, items: list[dict], preds: dict[str, dict]) -> str:
     models = Counter(p.get("model") for p in preds.values() if p.get("model"))
     if models:
         lines.append("model: " + ", ".join(models))
+    engines = Counter(str(p.get("engine_version")) for p in preds.values() if "engine_version" in p)
+    if engines:
+        lines.append("engine: " + ", ".join(f"{e} ({n})" for e, n in engines.items()))
+    if len(models) > 1 or len(engines) > 1:
+        lines.append("WARNING: predictions from several models or engine versions: not one system's score")
 
     missing = [i["id"] for i in items if i["verdict"] == "missing"]
     if missing:
