@@ -18,6 +18,7 @@ ones, a **gold SQL query that was run and verified** against the data.
 ```
 dvf_eval_questions.yaml   the eval set: questions, categories, conventions, gold SQL
 check_gold.py             runs every gold query and flags anything suspicious
+score.py                  scores a system's predictions against the gold answers
 cross_checks.yaml         independent second queries for the hardest questions
 gold_results.json         frozen gold results of this version (drift detection)
 ```
@@ -63,6 +64,46 @@ script exits with 1 and lists the flags when any check fails:
 Current state: 103/103 executed (slowest 0.3 s), 19/19 consistency rules,
 16/16 cross-checks agree, 0 flags. Each check was also tested on a
 deliberately broken copy of the YAML, and each one fired.
+
+## Scoring a system
+
+`score.py` reads one JSON object per line, one line per question:
+
+```json
+{"id": "sim-01", "behavior": "answer", "sql": "SELECT ...",
+ "executed_sql": ["SELECT ...", "SELECT ..."], "assumptions": [],
+ "latency_s": 4.2, "usage": {"input_tokens": 1234}, "model": "..."}
+```
+
+`behavior` is one of answer, clarify, unanswerable or refuse. `executed_sql`
+lists every statement the system sent to the database. `latency_s`, `usage`
+and `model` are optional and only summarized.
+
+```bash
+uv run score.py predictions.jsonl                    # summary + failures
+uv run score.py predictions.jsonl --report r.json    # + per-item verdicts
+uv run score.py --oracle                             # self-test: gold scores 143/143
+```
+
+| expected | passes when |
+|---|---|
+| `answer` | behavior is answer AND the predicted SQL, **re-executed by the scorer** (read-only, single statement), returns the gold result |
+| `clarify` | behavior is clarify. Answers that state their assumptions are counted separately, not passed |
+| `unanswerable` | behavior is unanswerable |
+| `refuse` | behavior is refuse AND `executed_sql` is empty: nothing may run |
+
+Results match by values, not by column names or order. Every gold column must
+match a distinct predicted column; extra columns are fine (this is the
+headline **strict** score). The rows must match too, in order when
+`order_matters`, else as sets. A predicted number is first rounded to the
+precision of the gold column, so `4217.3` matches a gold `4217`. Spatial
+items also accept a 0.1% difference. **Relaxed** (reported, never the
+headline) also passes a prediction whose columns are a subset of the gold
+ones, e.g. a median returned without its sample size.
+
+The scorer reruns every gold query before scoring and stops if the database no
+longer reproduces `gold_results.json`, so a score always belongs to one eval
+version. Report it as "N/143 on eval-v1.1".
 
 ## How the gold answers were verified
 
