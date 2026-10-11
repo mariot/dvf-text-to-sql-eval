@@ -18,7 +18,8 @@
 # Conventions (the semantic layer, sql/semantic.sql in dvf-airflow-pipeline):
 #   - Scope: Gironde (code_departement '33'), DVF géolocalisées (Etalab), years 2021-2025.
 #   - Query only dvf.ventes (1 row per mutation), dvf.biens (1 row per deduplicated
-#     property), dvf.lieux (landmarks), dvf.zones (groups of communes), dvf.communes.
+#     property), dvf.lieux (landmarks), dvf.zones (groups of communes), dvf.communes
+#     (one official name per INSEE code; look codes up there, never guess them).
 #   - "vente" = 1 mutation; est_vente = Vente, VEFA, Vente terrain à bâtir, Adjudication
 #     (Echange and Expropriation are mutations, not sales). "transactions" = ventes.
 #   - "N maisons/appartements vendus" counts properties (dvf.biens); "ventes de maisons"
@@ -37,7 +38,8 @@
 #     ties are kept (rank() <= N) when they cross the cut-off.
 #   - No year given = all years 2021-2025. "Depuis YYYY" includes YYYY. "Dernières
 #     années" = last complete years in the data. Relative dates use eval_today.
-#   - Percentages: one decimal. EUR/m2 rounded to the euro.
+#   - Percentages: one decimal. EUR/m2 rounded to the euro, except where rounding
+#     would erase the value itself (agg-16: a 0.01 EUR/m2 symbolic price stays 0.01).
 #   - Spatial: geom columns are Lambert-93 (EPSG:2154, metres). Distance-based counts
 #     differ from geodesic ones by < 0.1%: score them with that tolerance.
 #   - VEFA TRAP: ~95% of VEFA sales have no type_local and no surface
@@ -50,7 +52,7 @@
 
 dvf_release: "2026-04"  # DGFiP release of April 2026 (Etalab geo-dvf files Last-Modified 2026-05-18); 2025 complete
 eval_today: "2026-10-15"
-eval_version: "1.1"     # bump on ANY gold change (SQL, conventions, categories); tag eval-v<version>
+eval_version: "1.2"     # bump on ANY gold change (SQL, conventions, categories); tag eval-v<version>
 questions:
   - id: sim-01
     category: simple
@@ -416,7 +418,7 @@ questions:
     question: "Quel est le prix au m² le plus bas observé pour un appartement à Bordeaux en 2024 ?"
     paraphrase_of: null
     order_matters: false
-    notes: "Decision: NO outlier filter, the question asks for the lowest OBSERVED value. Result 0.01 EUR/m2 comes from two sales recorded at 1 EUR (symbolic price); the next values (8, 12, 53 EUR/m2) are not market prices either. The answer must flag it as a data artefact, not a price."
+    notes: "Decision: NO outlier filter, the question asks for the lowest OBSERVED value. Result 0.01 EUR/m2 comes from two sales recorded at 1 EUR (symbolic price); the next values (8, 12, 53 EUR/m2) are not market prices either. The answer must flag it as a data artefact, not a price. EXCEPTION to the 'EUR/m2 to the euro' rule: rounding would turn it into 0 and hide what it is."
     sql: |
       -- No outlier filter: the question asks for the lowest OBSERVED value.
       SELECT min(prix_m2) AS prix_m2_min
@@ -1104,10 +1106,11 @@ questions:
     question: "Quelles ventes d'appartements à plus de 10 000 €/m² se trouvent à moins de 1 km de la place des Quinconces ?"
     paraphrase_of: null
     order_matters: false
-    notes: "dvf.lieux. No year: all years. Returns no address (privacy)."
+    notes: "dvf.lieux. No year: all years. Returns no address (privacy). prix_m2 rounded to the euro (v1.1 had cents); the filter still uses the exact value (> 10 000)."
     sql: |
       -- No year given: all years (2021-2025).
-      SELECT v.id_mutation, v.date_mutation, v.valeur_fonciere, v.surface_reelle_bati, v.prix_m2,
+      SELECT v.id_mutation, v.date_mutation, v.valeur_fonciere, v.surface_reelle_bati,
+             round(v.prix_m2) AS prix_m2,
              round(ST_Distance(v.geom, l.geom)) AS distance_m
       FROM dvf.ventes v, dvf.lieux l
       WHERE l.nom = 'Place des Quinconces'
@@ -1375,7 +1378,7 @@ questions:
     question: "Quel est le taux de croissance annuel moyen du prix médian au m² des appartements à Bordeaux entre 2021 et 2025 ?"
     paraphrase_of: null
     order_matters: false
-    notes: "CAGR: (p2025/p2021)^(1/4) - 1, in %."
+    notes: "CAGR: (p2025/p2021)^(1/4) - 1, in %, one decimal (v1.1 had two decimals, against the convention)."
     sql: |
       WITH m AS (
           SELECT annee, percentile_cont(0.5) WITHIN GROUP (ORDER BY prix_m2) AS med
@@ -1385,7 +1388,7 @@ questions:
           GROUP BY annee
       )
       SELECT round((100 * (power(max(med) FILTER (WHERE annee = 2025)
-                               / max(med) FILTER (WHERE annee = 2021), 1.0 / 4) - 1))::numeric, 2)
+                               / max(med) FILTER (WHERE annee = 2021), 1.0 / 4) - 1))::numeric, 1)
                  AS taux_croissance_annuel_moyen_pct
       FROM m;
 
@@ -1415,7 +1418,7 @@ questions:
     question: "Quelles ventes de maisons en Gironde en 2024 ont un prix au m² plus de trois fois supérieur à la médiane de leur commune ?"
     paraphrase_of: null
     order_matters: false
-    notes: "Outlier detection; commune median from the same year's single-house sales, with no minimum sample (the question sets none), so medians of tiny communes are noisy."
+    notes: "Outlier detection; commune median from the same year's single-house sales, with no minimum sample (the question sets none), so medians of tiny communes are noisy. prix_m2 rounded to the euro (v1.1 had cents)."
     sql: |
       WITH m AS (
           SELECT code_commune, percentile_cont(0.5) WITHIN GROUP (ORDER BY prix_m2) AS med
@@ -1423,8 +1426,8 @@ questions:
           WHERE annee = 2024 AND type_bien = 'Maison' AND prix_m2 IS NOT NULL
           GROUP BY code_commune
       )
-      SELECT v.id_mutation, v.nom_commune, v.valeur_fonciere, v.surface_reelle_bati, v.prix_m2,
-             round(m.med) AS prix_m2_median_commune
+      SELECT v.id_mutation, v.nom_commune, v.valeur_fonciere, v.surface_reelle_bati,
+             round(v.prix_m2) AS prix_m2, round(m.med) AS prix_m2_median_commune
       FROM dvf.ventes v
       JOIN m USING (code_commune)
       WHERE v.annee = 2024 AND v.type_bien = 'Maison' AND v.prix_m2 > 3 * m.med;

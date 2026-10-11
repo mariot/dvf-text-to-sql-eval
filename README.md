@@ -10,7 +10,7 @@ ones, a **gold SQL query that was run and verified** against the data.
 | Questions | 143 (103 with gold SQL) |
 | Data | DVF géolocalisées (Etalab), DGFiP release **2026-04**, years 2021-2025 |
 | Scope | Gironde (department 33) |
-| Version | **eval-v1.1** (`eval_version: "1.1"` in the YAML, git tag `eval-v1.1`); see the changelog |
+| Version | **eval-v1.2** (`eval_version: "1.2"` in the YAML, git tag `eval-v1.2`); see the changelog |
 | Database | [`dvf-airflow-pipeline`](https://github.com/mariot/dvf-airflow-pipeline): PostgreSQL 16 + PostGIS, semantic layer `sql/semantic.sql` |
 
 ## Contents
@@ -103,7 +103,7 @@ ones, e.g. a median returned without its sample size.
 
 The scorer reruns every gold query before scoring and stops if the database no
 longer reproduces `gold_results.json`, so a score always belongs to one eval
-version. Report it as "N/143 on eval-v1.1".
+version. Report it as "N/143 on eval-v1.2".
 
 ## How the gold answers were verified
 
@@ -134,6 +134,10 @@ The full list is at the top of the YAML. The ones that change results most:
   apartment, dépendances allowed), nature Vente or VEFA, price > 0.
 - **VEFA trap:** ~95% of VEFA sales have no property type and no surface.
 - Rankings need >= 20 sales; default top-N is 10; ties at the cut-off are kept.
+- Commune codes come from `dvf.communes` (official list, one name per INSEE
+  code), never from memory: postal codes such as 33012 are not INSEE codes.
+- Percentages to one decimal, EUR/m² to the euro (except agg-16, where
+  rounding would turn a 0.01 EUR/m² symbolic price into 0).
 - Distances are in Lambert-93 (EPSG:2154); score distance-based counts with a
   ~0.1% tolerance (geodesic distances differ by 0.035% at 5 km).
 - Relative dates use `eval_today: 2026-10-15`.
@@ -148,12 +152,25 @@ snapshot. So:
 2. Re-freeze: `uv run check_gold.py --write-snapshot` (it refuses nothing, so
    review the diff of `gold_results.json`).
 3. Commit, then tag `eval-v<version>` and push the tag.
-4. Report every score with its eval version: "62/103 on eval-v1.1".
+4. Report every score with its eval version: "62/103 on eval-v1.2".
 
 A new DVF release (April / October) changes results even with identical SQL:
 `check_gold.py` then flags the snapshot, and that is a new version too.
 
 ## Changelog
+
+**v1.2** (dvf_release 2026-04). Gold answers now follow the eval's own
+rounding conventions.
+- **mul-11**: CAGR to one decimal, -2.65 → -2.6 %.
+- **mul-13** and **spa-09**: `prix_m2` rounded to the euro (was to the cent).
+- **agg-16** keeps 0.01 EUR/m², documented as the only exception to the
+  rounding rule: rounding it to 0 would hide that it is a 1 EUR symbolic price.
+- The semantic layer gained the official list of communes
+  (`dvf-airflow-pipeline` f696c23): `dvf.communes` now has one official name
+  per INSEE code, and a sale's code and name always come from the same row.
+  No gold result changed because of it (checked with `check_gold.py`).
+
+Scores on v1.1 and v1.2 differ only on mul-11, mul-13 and spa-09.
 
 **v1.1** (dvf_release 2026-04). A query-by-query review of every gold SQL
 looked for results that run fine but make no sense.
