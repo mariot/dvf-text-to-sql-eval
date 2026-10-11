@@ -1,0 +1,480 @@
+{
+ "eval_version": "1.3",
+ "dvf_release": "2026-04",
+ "results": {
+  "trn-001": {
+   "columns": [
+    "nom_commune",
+    "part_adresses_pct"
+   ],
+   "rows": [
+    [
+     "Sainte-Foy-la-Grande",
+     100.0
+    ],
+    [
+     "Cadillac-sur-Garonne",
+     94.1
+    ],
+    [
+     "Saint-Macaire",
+     93.1
+    ],
+    [
+     "Bordeaux",
+     89.6
+    ],
+    [
+     "Guîtres",
+     85.0
+    ],
+    [
+     "Le Bouscat",
+     84.3
+    ],
+    [
+     "Branne",
+     81.3
+    ]
+   ]
+  },
+  "trn-002": {
+   "columns": [
+    "prix_median",
+    "nb_ventes"
+   ],
+   "rows": [
+    [
+     474775.0,
+     70
+    ]
+   ]
+  },
+  "trn-003": {
+   "columns": [
+    "nom_commune",
+    "prix_median",
+    "nb_ventes"
+   ],
+   "rows": [
+    [
+     "Ambès",
+     194690.0,
+     27
+    ],
+    [
+     "Saint-Louis-de-Montferrand",
+     209000.0,
+     20
+    ],
+    [
+     "Ambarès-et-Lagrave",
+     235000.0,
+     127
+    ],
+    [
+     "Bassens",
+     235500.0,
+     50
+    ],
+    [
+     "Lormont",
+     242550.0,
+     75
+    ],
+    [
+     "Cenon",
+     262500.0,
+     118
+    ],
+    [
+     "Floirac",
+     275000.0,
+     88
+    ],
+    [
+     "Carbon-Blanc",
+     276832.0,
+     65
+    ],
+    [
+     "Artigues-près-Bordeaux",
+     289525.0,
+     70
+    ],
+    [
+     "Parempuyre",
+     291130.0,
+     87
+    ],
+    [
+     "Villenave-d'Ornon",
+     296000.0,
+     266
+    ]
+   ]
+  },
+  "trn-004": {
+   "columns": [
+    "nom_commune",
+    "minutes_median"
+   ],
+   "rows": [
+    [
+     "Talence",
+     32.6
+    ],
+    [
+     "Mérignac",
+     34.9
+    ],
+    [
+     "Bordeaux",
+     35.6
+    ]
+   ]
+  },
+  "trn-005": {
+   "columns": [
+    "loyer_m2",
+    "loyer_mensuel_estime"
+   ],
+   "rows": [
+    [
+     13.2,
+     858.0
+    ]
+   ]
+  },
+  "trn-006": {
+   "columns": [
+    "loyer_m2",
+    "prix_m2_median",
+    "nb_ventes",
+    "rendement_brut_pct"
+   ],
+   "rows": [
+    [
+     15.99,
+     4117.0,
+     3442,
+     4.7
+    ]
+   ]
+  },
+  "trn-007": {
+   "columns": [
+    "annees_de_loyer"
+   ],
+   "rows": [
+    [
+     21.5
+    ]
+   ]
+  },
+  "trn-008": {
+   "columns": [
+    "ecole",
+    "statut",
+    "minutes_a_pied"
+   ],
+   "rows": [
+    [
+     "Ecole primaire privée Notre Dame",
+     "Privé",
+     6.9
+    ]
+   ]
+  },
+  "trn-009": {
+   "columns": [
+    "ips_moyen_cenon",
+    "ips_departemental",
+    "nb_ecoles"
+   ],
+   "rows": [
+    [
+     93.7,
+     112.2,
+     9
+    ]
+   ]
+  },
+  "trn-010": {
+   "columns": [
+    "nb_ecoles"
+   ],
+   "rows": [
+    [
+     33
+    ]
+   ]
+  },
+  "trn-011": {
+   "columns": [
+    "nb_ecoles"
+   ],
+   "rows": [
+    [
+     2
+    ]
+   ]
+  },
+  "trn-012": {
+   "columns": [
+    "nom",
+    "va_taux_reussite",
+    "taux_reussite",
+    "nb_candidats"
+   ],
+   "rows": [
+    [
+     "Collège Casimir Fidèle",
+     11.0,
+     89.0,
+     113
+    ]
+   ]
+  },
+  "trn-013": {
+   "columns": [
+    "minutes_median",
+    "nb_adresses"
+   ],
+   "rows": [
+    [
+     47.7,
+     10839
+    ]
+   ]
+  },
+  "trn-014": {
+   "columns": [
+    "nom_commune",
+    "minutes_aeroport",
+    "minutes_centre",
+    "plus_long_trajet"
+   ],
+   "rows": [
+    [
+     "Mérignac",
+     37.1,
+     46.0,
+     46.0
+    ],
+    [
+     "Pessac",
+     47.8,
+     51.7,
+     51.7
+    ],
+    [
+     "Eysines",
+     51.9,
+     43.5,
+     51.9
+    ]
+   ]
+  },
+  "trn-015": {
+   "columns": [
+    "prix_m2_median",
+    "nb_ventes"
+   ],
+   "rows": [
+    [
+     4331.0,
+     2058
+    ]
+   ]
+  },
+  "trn-016": {
+   "columns": [
+    "loyer_m2",
+    "loyer_mensuel_estime"
+   ],
+   "rows": [
+    [
+     17.6,
+     317.0
+    ]
+   ]
+  },
+  "trn-017": {
+   "columns": [
+    "nom_commune",
+    "loyer_m2",
+    "minutes_median"
+   ],
+   "rows": [
+    [
+     "Talence",
+     18.4,
+     18.9
+    ]
+   ]
+  },
+  "trn-018": {
+   "columns": [
+    "prix_m2_median",
+    "surface_m2"
+   ],
+   "rows": [
+    [
+     4117.0,
+     49.0
+    ]
+   ]
+  },
+  "trn-019": {
+   "columns": [
+    "prix_median",
+    "nb_ventes"
+   ],
+   "rows": [
+    [
+     200000.0,
+     103
+    ]
+   ]
+  },
+  "trn-020": {
+   "columns": [
+    "part_pct",
+    "nb_dpe"
+   ],
+   "rows": [
+    [
+     5.3,
+     851
+    ]
+   ]
+  },
+  "trn-021": {
+   "columns": [
+    "cout_annuel_median",
+    "nb_dpe"
+   ],
+   "rows": [
+    [
+     1151.0,
+     12488
+    ]
+   ]
+  },
+  "trn-022": {
+   "columns": [
+    "part_generes_immeuble_pct"
+   ],
+   "rows": [
+    [
+     26.6
+    ]
+   ]
+  },
+  "trn-023": {
+   "columns": [
+    "nb_logements"
+   ],
+   "rows": [
+    [
+     2037
+    ]
+   ]
+  },
+  "trn-024": {
+   "columns": [
+    "nom_commune",
+    "nb_logements_sociaux"
+   ],
+   "rows": [
+    [
+     "Bordeaux",
+     24014
+    ],
+    [
+     "Mérignac",
+     7651
+    ],
+    [
+     "Pessac",
+     7593
+    ],
+    [
+     "Talence",
+     5283
+    ],
+    [
+     "Lormont",
+     5040
+    ]
+   ]
+  },
+  "trn-025": {
+   "columns": [
+    "nom_commune",
+    "vacants_plus_2ans"
+   ],
+   "rows": [
+    [
+     "Bordeaux",
+     4746
+    ],
+    [
+     "Talence",
+     416
+    ],
+    [
+     "Mérignac",
+     365
+    ],
+    [
+     "Pessac",
+     299
+    ],
+    [
+     "Villenave-d'Ornon",
+     230
+    ]
+   ]
+  },
+  "trn-026": {
+   "columns": [
+    "taux_vacance_pct"
+   ],
+   "rows": [
+    [
+     6.0
+    ]
+   ]
+  },
+  "trn-027": {
+   "columns": [
+    "taux_2020_pct",
+    "moyenne_depuis_1950_pct"
+   ],
+   "rows": [
+    [
+     -0.11,
+     6.75
+    ]
+   ]
+  },
+  "trn-028": {
+   "columns": [
+    "annee",
+    "duree_annees"
+   ],
+   "rows": [
+    [
+     1975,
+     14.1
+    ],
+    [
+     2020,
+     21.9
+    ]
+   ]
+  }
+ }
+}

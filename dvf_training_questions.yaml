@@ -1,0 +1,492 @@
+# DVF text-to-SQL TRAINING set: home-search questions, never scored (kept apart from the eval set)
+#
+# Fields
+#   id               stable identifier, never reuse
+#   category         simple | aggregation | temporal | ranking | spatial | multi_step |
+#                    data_quality | paraphrase | ambiguous | unanswerable | security | privacy
+#   difficulty       easy | medium | hard  (your estimate; revise after the baseline run)
+#   expected_behavior
+#                    answer        -> the system must return the same result as `sql`
+#                    clarify       -> the system must ask a question (or state assumptions)
+#                    unanswerable  -> the system must say the data cannot answer
+#                    refuse        -> the system must refuse; nothing may execute
+#   paraphrase_of    id of the reference question (same expected result), or null
+#   order_matters    compare results as ordered lists (true) or as unordered sets (false)
+#   notes            traps and conventions to keep in mind when writing the SQL
+#   sql              gold query: fill in for `answer` items, leave null otherwise
+#
+# Conventions (the semantic layer, sql/semantic.sql in dvf-airflow-pipeline):
+#   - Scope: Gironde (code_departement '33'), DVF géolocalisées (Etalab), years 2021-2025.
+#   - Query only dvf.ventes (1 row per mutation), dvf.biens (1 row per deduplicated
+#     property), dvf.lieux (landmarks), dvf.zones (groups of communes), dvf.communes
+#     (one official name per INSEE code; look codes up there, never guess them).
+#   - "vente" = 1 mutation; est_vente = Vente, VEFA, Vente terrain à bâtir, Adjudication
+#     (Echange and Expropriation are mutations, not sales). "transactions" = ventes.
+#   - "N maisons/appartements vendus" counts properties (dvf.biens); "ventes de maisons"
+#     counts sales whose type_bien is Maison (house + optional dépendances).
+#   - DVF repeats a local once per nature de culture of its parcel: dvf.biens keeps one
+#     row per real local (Gironde 2024: 14 371 raw Maison rows for 12 388 houses).
+#   - A mutation spanning several communes counts once, in its main property's commune
+#     (so commune counts add up to the department total). Same for code_postal.
+#   - "prix" without qualifier = median. Price statistics use vente_reference: exactly
+#     one house or apartment (dépendances allowed, no commercial premises), nature Vente
+#     or VEFA, valeur_fonciere > 0. prix_m2 = valeur_fonciere / surface_reelle_bati.
+#   - Descriptive property statistics (surface, pièces) use dvf.biens; when counts and
+#     prices are combined, both come from the vente_reference sample.
+#   - T<n> = apartment with n pièces principales. "Plus de" = strictly greater.
+#   - Rankings: minimum 20 sales in the statistic's sample; default top-N = 10;
+#     ties are kept (rank() <= N) when they cross the cut-off.
+#   - No year given = all years 2021-2025. "Depuis YYYY" includes YYYY. "Dernières
+#     années" = last complete years in the data. Relative dates use eval_today.
+#   - Percentages: one decimal. EUR/m2 rounded to the euro, except where rounding
+#     would erase the value itself (agg-16: a 0.01 EUR/m2 symbolic price stays 0.01).
+#   - Spatial: geom columns are Lambert-93 (EPSG:2154, metres). Distance-based counts
+#     differ from geodesic ones by < 0.1%: score them with that tolerance.
+#   - VEFA TRAP: ~95% of VEFA sales have no type_local and no surface
+#     (type_bien = 'Lot non décrit'): never counted as apartments, no prix_m2.
+#   - Home-search questions (v1.3): asked by future renters and buyers (families,
+#     commuters, students, investors); each note starts with WHY they ask.
+#     * Rents (dvf.loyers): predicted advertised rent EUR/m2 charges included, not a
+#       median; default segment 'appartement', T1-T2 / studio -> appartement_1_2_pieces,
+#       T3+ -> appartement_3_pieces_plus; default year = latest edition (2025); editions
+#       NOT comparable over time; monthly rent of S m2 = loyer_m2 x S; rankings keep
+#       fiable estimates only.
+#     * Budget: surface = budget / median prix_m2 of the latest complete year (2025);
+#       gross yield = 12 x loyer_m2 / median prix_m2 x 100; price-to-rent = prix_m2 /
+#       (12 x loyer_m2).
+#     * Commute (dvf.temps_trajet): typical door-to-destination minutes by public
+#       transport, arrival 07:30-09:00 on a Tuesday; per commune = median over its
+#       addresses. Destinations: Centre de Bordeaux, Gare Saint-Jean, Aéroport de
+#       Mérignac, CHU Pellegrin, Campus Talence-Pessac.
+#     * Schools on foot (dvf.acces_adresses): walking minutes on the street network;
+#       "most addresses" = more than 50 %. IPS is a social profile, not a quality
+#       score; collège results = IVAC (value added).
+#     * Vacancy rate = vacants / parc_prive of the same LOVAC edition (2025 = latest with
+#       a stock; method break in 2025). DPE: passoire = F or G; dwelling statistics
+#       exclude type_batiment 'immeuble'. Long series: rates are fractions, answer in %.
+#   - "Terrain à bâtir" is ambiguous (VAT nature_mutation vs cadastral culture AB).
+#
+# Spatial questions marked with `lieux` use dvf.lieux (Place de la Bourse, Gare
+# Saint-Jean, Place des Quinconces, Aéroport Bordeaux-Mérignac, Plage centrale de
+# Lacanau-Océan), WGS84 coordinates from OpenStreetMap / AIP, approximate.
+
+dvf_release: "2026-04"  # DGFiP release of April 2026 (Etalab geo-dvf files Last-Modified 2026-05-18); 2025 complete
+eval_today: "2026-10-15"
+eval_version: "1.3"     # conventions shared with this eval version
+training_version: "1.0"     # bump on ANY gold change (SQL, conventions, categories); tag eval-v<version>
+questions:
+  - id: trn-001
+    category: multi_step
+    difficulty: hard
+    expected_behavior: answer
+    question: "Nous attendons un deuxième enfant et cherchons une maison avec un collège à moins de 15 minutes à pied. Dans quelles communes de Gironde est-ce le cas pour au moins 80 % des adresses ?"
+    paraphrase_of: null
+    order_matters: true
+    notes: "WHY: a growing family plans ahead for collège. Share of the commune's addresses with min_college < 15."
+    sql: |
+      SELECT c.nom_commune,
+             round(100.0 * count(*) FILTER (WHERE a.min_college < 15) / count(*), 1) AS part_adresses_pct
+      FROM dvf.acces_adresses a JOIN dvf.communes c USING (code_commune)
+      GROUP BY c.nom_commune HAVING 100.0 * count(*) FILTER (WHERE a.min_college < 15) / count(*) >= 80
+      ORDER BY part_adresses_pct DESC, c.nom_commune;
+
+  - id: trn-002
+    category: aggregation
+    difficulty: medium
+    expected_behavior: answer
+    question: "Quel est le prix médian d'une maison de 4 pièces au Bouscat ?"
+    paraphrase_of: null
+    order_matters: false
+    notes: "WHY: a family needs 3 bedrooms and checks the price level. Convention: latest complete year (2025), single-house sales, 4 pièces."
+    sql: |
+      SELECT round(percentile_cont(0.5) WITHIN GROUP (ORDER BY valeur_fonciere)) AS prix_median, count(*) AS nb_ventes
+      FROM dvf.ventes WHERE code_commune = '33069' AND annee = 2025 AND vente_reference AND type_bien = 'Maison' AND nombre_pieces = 4;
+
+  - id: trn-003
+    category: multi_step
+    difficulty: hard
+    expected_behavior: answer
+    question: "Avec 300 000 € de budget, dans quelles communes de Bordeaux Métropole peut-on encore acheter une maison au prix médian ?"
+    paraphrase_of: null
+    order_matters: true
+    notes: "WHY: a family filters communes by budget. Convention: median single-house price 2025 <= 300 000, >= 20 sales."
+    sql: |
+      SELECT c.nom_commune, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY v.valeur_fonciere)) AS prix_median, count(*) AS nb_ventes
+      FROM dvf.ventes v
+      JOIN dvf.zones z ON z.code_commune = v.code_commune AND z.zone = 'Bordeaux Métropole'
+      JOIN dvf.communes c ON c.code_commune = v.code_commune
+      WHERE v.annee = 2025 AND v.vente_reference AND v.type_bien = 'Maison'
+      GROUP BY c.nom_commune HAVING count(*) >= 20 AND percentile_cont(0.5) WITHIN GROUP (ORDER BY v.valeur_fonciere) <= 300000
+      ORDER BY prix_median;
+
+  - id: trn-004
+    category: multi_step
+    difficulty: hard
+    expected_behavior: answer
+    question: "Je suis infirmière au CHU Pellegrin et je fais des horaires décalés sans voiture : quelles communes sont à moins de 40 minutes de l'hôpital en transports ?"
+    paraphrase_of: null
+    order_matters: true
+    notes: "WHY: a hospital worker needs a short public-transport commute. Median address time to 'CHU Pellegrin' < 40 min. Note: the times are for a weekday morning, not night shifts: the answer should say so."
+    sql: |
+      SELECT c.nom_commune, round(percentile_cont(0.5) WITHIN GROUP (ORDER BY t.minutes)::numeric, 1) AS minutes_median
+      FROM dvf.temps_trajet t JOIN dvf.communes c USING (code_commune)
+      WHERE t.pole = 'CHU Pellegrin'
+      GROUP BY c.nom_commune HAVING percentile_cont(0.5) WITHIN GROUP (ORDER BY t.minutes) < 40
+      ORDER BY minutes_median;
+
+  - id: trn-005
+    category: aggregation
+    difficulty: medium
+    expected_behavior: answer
+    question: "Je cherche à louer un T3 de 65 m² à Bègles : quel loyer mensuel prévoir ?"
+    paraphrase_of: null
+    order_matters: false
+    notes: "WHY: a couple with a child budgets rent. T3 -> appartement_3_pieces_plus, 2025, loyer_m2 x 65."
+    sql: |
+      SELECT loyer_m2, round(loyer_m2 * 65) AS loyer_mensuel_estime FROM dvf.loyers
+      WHERE code_commune = '33039' AND annee = 2025 AND segment = 'appartement_3_pieces_plus';
+
+  - id: trn-006
+    category: multi_step
+    difficulty: hard
+    expected_behavior: answer
+    question: "Je veux acheter un appartement à Bordeaux pour le louer : quel rendement brut puis-je espérer ?"
+    paraphrase_of: null
+    order_matters: false
+    notes: "WHY: a rental investor compares returns."
+    sql: |
+      WITH prix AS (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY prix_m2) AS med, count(*) AS n FROM dvf.ventes
+                      WHERE code_commune = '33063' AND annee = 2025 AND type_bien = 'Appartement' AND prix_m2 IS NOT NULL),
+           loyer AS (SELECT loyer_m2 FROM dvf.loyers WHERE code_commune = '33063' AND annee = 2025 AND segment = 'appartement')
+      SELECT loyer.loyer_m2, round(prix.med) AS prix_m2_median, prix.n AS nb_ventes,
+             round((100 * 12 * loyer.loyer_m2 / prix.med)::numeric, 1) AS rendement_brut_pct FROM prix, loyer;
+
+  - id: trn-007
+    category: multi_step
+    difficulty: hard
+    expected_behavior: answer
+    question: "Combien d'années de loyer faut-il pour payer un appartement à Bordeaux ?"
+    paraphrase_of: null
+    order_matters: false
+    notes: "WHY: a renter weighs buying vs renting. Convention: price-to-rent ratio = median apartment prix_m2 2025 / (12 x 2025 apartment rent per m2), years, one decimal."
+    sql: |
+      WITH prix AS (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY prix_m2) AS med FROM dvf.ventes
+                      WHERE code_commune = '33063' AND annee = 2025 AND type_bien = 'Appartement' AND prix_m2 IS NOT NULL),
+           loyer AS (SELECT loyer_m2 FROM dvf.loyers WHERE code_commune = '33063' AND annee = 2025 AND segment = 'appartement')
+      SELECT round((prix.med / (12 * loyer.loyer_m2))::numeric, 1) AS annees_de_loyer FROM prix, loyer;
+
+  - id: trn-008
+    category: spatial
+    difficulty: easy
+    expected_behavior: answer
+    question: "Nous regardons un logement au 10 cours de l'Intendance à Bordeaux : y a-t-il une école maternelle à proximité à pied ?"
+    paraphrase_of: null
+    order_matters: false
+    notes: "WHY: parents of a toddler check the walk to school."
+    sql: |
+      SELECT e.nom AS ecole, e.statut, a.min_maternelle AS minutes_a_pied
+      FROM dvf.acces_adresses a JOIN dvf.ecoles e ON e.uai = a.uai_maternelle
+      WHERE a.code_commune = '33063' AND a.nom_voie = 'Cours de l''Intendance' AND a.numero = 10 AND a.rep IS NULL;
+
+  - id: trn-009
+    category: aggregation
+    difficulty: medium
+    expected_behavior: answer
+    question: "Les écoles de Cenon accueillent-elles des élèves plutôt favorisés ou défavorisés par rapport au reste de la Gironde ?"
+    paraphrase_of: null
+    order_matters: false
+    notes: "WHY: parents want to understand the social mix. Convention: average IPS of Cenon écoles at rentrée 2024 ('2024-2025') vs the departmental IPS; IPS is a social profile, not a quality score."
+    sql: |
+      SELECT round(avg(i.ips), 1) AS ips_moyen_cenon, round(avg(i.ips_departemental), 1) AS ips_departemental, count(*) AS nb_ecoles
+      FROM dvf.ecoles e JOIN dvf.ecoles_ips i USING (uai)
+      WHERE e.code_commune = '33119' AND e.type = 'ecole' AND i.rentree = '2024-2025' AND i.ips IS NOT NULL;
+
+  - id: trn-010
+    category: simple
+    difficulty: easy
+    expected_behavior: answer
+    question: "Combien d'écoles de Bordeaux sont classées en éducation prioritaire (REP ou REP+) ?"
+    paraphrase_of: null
+    order_matters: false
+    notes: "WHY: parents learn about the school map of a neighbourhood they may move to."
+    sql: |
+      SELECT count(*) AS nb_ecoles FROM dvf.ecoles WHERE code_commune = '33063' AND type = 'ecole' AND education_prioritaire IN ('REP', 'REP+');
+
+  - id: trn-011
+    category: simple
+    difficulty: easy
+    expected_behavior: answer
+    question: "Combien y a-t-il d'écoles élémentaires publiques au Haillan ?"
+    paraphrase_of: null
+    order_matters: false
+    notes: "WHY: a family moving to Le Haillan checks school choice."
+    sql: |
+      SELECT count(*) AS nb_ecoles FROM dvf.ecoles WHERE code_commune = '33200' AND type = 'ecole' AND elementaire AND statut = 'Public' AND choix_famille;
+
+  - id: trn-012
+    category: ranking
+    difficulty: hard
+    expected_behavior: answer
+    question: "Quel collège de Gironde fait le plus progresser ses élèves au brevet ?"
+    paraphrase_of: null
+    order_matters: false
+    notes: "WHY: parents look for a collège that adds value, not only one with privileged pupils. Value added on the success rate, session 2025, >= 50 candidates."
+    sql: |
+      SELECT e.nom, c.va_taux_reussite, c.taux_reussite, c.nb_candidats FROM dvf.colleges_ivac c JOIN dvf.ecoles e USING (uai)
+      WHERE c.session = 2025 AND c.nb_candidats >= 50 AND c.va_taux_reussite IS NOT NULL
+      ORDER BY c.va_taux_reussite DESC, e.nom LIMIT 1;
+
+  - id: trn-013
+    category: spatial
+    difficulty: medium
+    expected_behavior: answer
+    question: "J'habite à Libourne : en combien de temps puis-je rejoindre la gare Saint-Jean en transports le matin ?"
+    paraphrase_of: null
+    order_matters: false
+    notes: "WHY: a commuter considers living further out for cheaper housing. Median over Libourne's addresses."
+    sql: |
+      SELECT round(percentile_cont(0.5) WITHIN GROUP (ORDER BY minutes)::numeric, 1) AS minutes_median, count(*) AS nb_adresses
+      FROM dvf.temps_trajet WHERE code_commune = '33243' AND pole = 'Gare Saint-Jean';
+
+  - id: trn-014
+    category: multi_step
+    difficulty: hard
+    expected_behavior: answer
+    question: "Nous travaillons l'un à l'aéroport de Mérignac et l'autre au centre de Bordeaux, sans voiture : dans quelles communes le plus long de nos deux trajets serait-il le plus court ?"
+    paraphrase_of: null
+    order_matters: true
+    notes: "WHY: a couple with two workplaces looks for the fairest compromise. Convention: per commune, median address time to each pole; rank by the longer of the two (greatest), top 3. No commune is under 45 min for both: Mérignac (37 / 46) is the best compromise."
+    sql: |
+      WITH t AS (
+          SELECT code_commune, pole, percentile_cont(0.5) WITHIN GROUP (ORDER BY minutes) AS med
+          FROM dvf.temps_trajet WHERE pole IN ('Aéroport de Mérignac', 'Centre de Bordeaux') GROUP BY code_commune, pole
+      )
+      SELECT c.nom_commune,
+             round(max(med) FILTER (WHERE pole = 'Aéroport de Mérignac')::numeric, 1) AS minutes_aeroport,
+             round(max(med) FILTER (WHERE pole = 'Centre de Bordeaux')::numeric, 1) AS minutes_centre,
+             round(max(med)::numeric, 1) AS plus_long_trajet
+      FROM t JOIN dvf.communes c USING (code_commune)
+      GROUP BY c.nom_commune HAVING count(*) = 2
+      ORDER BY max(med), c.nom_commune
+      LIMIT 3;
+
+  - id: trn-015
+    category: spatial
+    difficulty: hard
+    expected_behavior: answer
+    question: "Je veux vivre sans voiture près du tram à Bordeaux : quel est le prix médian au m² des appartements vendus à moins de 400 m d'un arrêt de tram en 2025 ?"
+    paraphrase_of: null
+    order_matters: false
+    notes: "WHY: a car-free buyer checks the premium of living near the tram. Straight-line 400 m."
+    sql: |
+      SELECT round(percentile_cont(0.5) WITHIN GROUP (ORDER BY v.prix_m2)) AS prix_m2_median, count(*) AS nb_ventes
+      FROM dvf.ventes v WHERE v.code_commune = '33063' AND v.annee = 2025 AND v.type_bien = 'Appartement' AND v.prix_m2 IS NOT NULL
+        AND EXISTS (SELECT 1 FROM dvf.arrets_transport a WHERE 'tram' = ANY (a.modes) AND ST_DWithin(v.geom, a.geom, 400));
+
+  - id: trn-016
+    category: aggregation
+    difficulty: medium
+    expected_behavior: answer
+    question: "Ma fille entre à l'université : quel loyer prévoir pour un studio de 18 m² à Pessac ?"
+    paraphrase_of: null
+    order_matters: false
+    notes: "WHY: a parent budgets a student's rent near the campus."
+    sql: |
+      SELECT loyer_m2, round(loyer_m2 * 18) AS loyer_mensuel_estime FROM dvf.loyers
+      WHERE code_commune = '33318' AND annee = 2025 AND segment = 'appartement_1_2_pieces';
+
+  - id: trn-017
+    category: multi_step
+    difficulty: hard
+    expected_behavior: answer
+    question: "Étudiant à Talence, je veux le loyer le moins cher possible à moins de 20 minutes du campus en transports : quelles communes regarder ?"
+    paraphrase_of: null
+    order_matters: true
+    notes: "WHY: a student trades rent against commute. Median time to 'Campus Talence-Pessac' < 20; 2025 small-apartment rent, reliable only; cheapest first."
+    sql: |
+      WITH t AS (SELECT code_commune, percentile_cont(0.5) WITHIN GROUP (ORDER BY minutes) AS med
+                 FROM dvf.temps_trajet WHERE pole = 'Campus Talence-Pessac' GROUP BY code_commune)
+      SELECT c.nom_commune, l.loyer_m2, round(t.med::numeric, 1) AS minutes_median
+      FROM t JOIN dvf.loyers l ON l.code_commune = t.code_commune AND l.annee = 2025 AND l.segment = 'appartement_1_2_pieces' AND l.fiable
+      JOIN dvf.communes c ON c.code_commune = t.code_commune
+      WHERE t.med < 20 ORDER BY l.loyer_m2, c.nom_commune;
+
+  - id: trn-018
+    category: aggregation
+    difficulty: medium
+    expected_behavior: answer
+    question: "Avec 200 000 €, quelle surface d'appartement puis-je acheter à Bordeaux ?"
+    paraphrase_of: null
+    order_matters: false
+    notes: "WHY: a first-time buyer converts a budget into square metres."
+    sql: |
+      SELECT round(percentile_cont(0.5) WITHIN GROUP (ORDER BY prix_m2)) AS prix_m2_median,
+             round((200000 / percentile_cont(0.5) WITHIN GROUP (ORDER BY prix_m2))::numeric) AS surface_m2
+      FROM dvf.ventes WHERE code_commune = '33063' AND annee = 2025 AND type_bien = 'Appartement' AND prix_m2 IS NOT NULL;
+
+  - id: trn-019
+    category: aggregation
+    difficulty: medium
+    expected_behavior: answer
+    question: "Quel est le prix médian d'un T3 à Villenave-d'Ornon ?"
+    paraphrase_of: null
+    order_matters: false
+    notes: "WHY: a couple with a child looks at a commune next to Bordeaux. Latest complete year 2025."
+    sql: |
+      SELECT round(percentile_cont(0.5) WITHIN GROUP (ORDER BY valeur_fonciere)) AS prix_median, count(*) AS nb_ventes
+      FROM dvf.ventes WHERE code_commune = '33550' AND annee = 2025 AND vente_reference AND type_bien = 'Appartement' AND nombre_pieces = 3;
+
+  - id: trn-020
+    category: data_quality
+    difficulty: medium
+    expected_behavior: answer
+    question: "Quelle part des maisons de Lormont diagnostiquées sont des passoires thermiques ?"
+    paraphrase_of: null
+    order_matters: false
+    notes: "WHY: a buyer anticipates renovation work."
+    sql: |
+      SELECT round(100.0 * count(*) FILTER (WHERE etiquette_dpe IN ('F', 'G')) / count(*), 1) AS part_pct, count(*) AS nb_dpe
+      FROM dvf.dpe WHERE code_commune = '33249' AND type_batiment = 'maison';
+
+  - id: trn-021
+    category: aggregation
+    difficulty: medium
+    expected_behavior: answer
+    question: "Pour un appartement classé E à Bordeaux, à quelle facture d'énergie annuelle dois-je m'attendre ?"
+    paraphrase_of: null
+    order_matters: false
+    notes: "WHY: a renter adds energy costs to the rent. Median conventional estimate."
+    sql: |
+      SELECT round(percentile_cont(0.5) WITHIN GROUP (ORDER BY cout_annuel_eur)) AS cout_annuel_median, count(*) AS nb_dpe
+      FROM dvf.dpe WHERE code_commune = '33063' AND type_batiment = 'appartement' AND etiquette_dpe = 'E';
+
+  - id: trn-022
+    category: data_quality
+    difficulty: medium
+    expected_behavior: answer
+    question: "Le DPE d'un appartement à Bordeaux reflète-t-il vraiment ce logement ou celui de l'immeuble ?"
+    paraphrase_of: null
+    order_matters: false
+    notes: "WHY: a buyer wonders how reliable the label is. Share of Bordeaux apartment certificates generated from the building's."
+    sql: |
+      SELECT round(100.0 * count(*) FILTER (WHERE methode = 'dpe appartement généré à partir des données DPE immeuble') / count(*), 1) AS part_generes_immeuble_pct
+      FROM dvf.dpe WHERE code_commune = '33063' AND type_batiment = 'appartement';
+
+  - id: trn-023
+    category: simple
+    difficulty: easy
+    expected_behavior: answer
+    question: "Combien de logements sociaux de 4 pièces y a-t-il à Mérignac ?"
+    paraphrase_of: null
+    order_matters: false
+    notes: "WHY: a large low-income family estimates its chances (stock, not availability). At 1 January 2025."
+    sql: |
+      SELECT count(*) AS nb_logements FROM dvf.logements_sociaux WHERE code_commune = '33281' AND annee = 2025 AND nb_pieces = 4;
+
+  - id: trn-024
+    category: ranking
+    difficulty: easy
+    expected_behavior: answer
+    question: "Dans quelles communes de Gironde y a-t-il le plus de logements sociaux ?"
+    paraphrase_of: null
+    order_matters: true
+    notes: "WHY: a household eligible for social housing targets its applications. Top 5, 1 January 2025."
+    sql: |
+      SELECT c.nom_commune, count(*) AS nb_logements_sociaux FROM dvf.logements_sociaux s JOIN dvf.communes c USING (code_commune)
+      WHERE s.annee = 2025 GROUP BY c.nom_commune ORDER BY nb_logements_sociaux DESC, c.nom_commune LIMIT 5;
+
+  - id: trn-025
+    category: ranking
+    difficulty: medium
+    expected_behavior: answer
+    question: "Je cherche une maison à rénover : dans quelles communes de Bordeaux Métropole y a-t-il le plus de logements vides depuis plus de deux ans ?"
+    paraphrase_of: null
+    order_matters: true
+    notes: "WHY: a buyer looks for renovation opportunities. LOVAC 2025, top 5, secrets excluded (not 0)."
+    sql: |
+      SELECT c.nom_commune, v.vacants_plus_2ans FROM dvf.logements_vacants v
+      JOIN dvf.zones z ON z.code_commune = v.code AND z.zone = 'Bordeaux Métropole'
+      JOIN dvf.communes c ON c.code_commune = v.code
+      WHERE v.niveau = 'commune' AND v.annee = 2025 AND v.vacants_plus_2ans IS NOT NULL
+      ORDER BY v.vacants_plus_2ans DESC LIMIT 5;
+
+  - id: trn-026
+    category: aggregation
+    difficulty: medium
+    expected_behavior: answer
+    question: "Le marché locatif en Gironde est-il tendu : quelle part du parc privé est vacante ?"
+    paraphrase_of: null
+    order_matters: false
+    notes: "WHY: an investor gauges demand at the department level. Latest edition with a stock (2025); mention the 2025 method break."
+    sql: |
+      SELECT round(100.0 * vacants / parc_prive, 1) AS taux_vacance_pct FROM dvf.logements_vacants WHERE niveau = 'departement' AND code = '33' AND annee = 2025;
+
+  - id: trn-027
+    category: temporal
+    difficulty: medium
+    expected_behavior: answer
+    question: "Les taux d'intérêt actuels sont-ils bas par rapport à l'histoire ?"
+    paraphrase_of: null
+    order_matters: false
+    notes: "WHY: a buyer decides whether to borrow now. Long-term rate in 2020 (latest year) vs its average since 1950, in %."
+    sql: |
+      SELECT round((max(valeur) FILTER (WHERE annee = 2020) * 100)::numeric, 2) AS taux_2020_pct,
+             round((avg(valeur) FILTER (WHERE annee >= 1950) * 100)::numeric, 2) AS moyenne_depuis_1950_pct
+      FROM dvf.series_longues WHERE pays = 'France' AND serie = 'Taux d''intérêt à long terme';
+
+  - id: trn-028
+    category: temporal
+    difficulty: easy
+    expected_behavior: answer
+    question: "Les prêts immobiliers sont-ils plus longs aujourd'hui que dans les années 1970 ?"
+    paraphrase_of: null
+    order_matters: false
+    notes: "WHY: a buyer compares borrowing conditions. Average loan term for an existing home, 1975 vs 2020."
+    sql: |
+      SELECT annee, round(valeur::numeric, 1) AS duree_annees FROM dvf.series_longues
+      WHERE pays = 'France' AND serie LIKE 'Durée des prêts%' AND annee IN (1975, 2020) ORDER BY annee;
+
+  - id: trn-029
+    category: unanswerable
+    difficulty: easy
+    expected_behavior: unanswerable
+    question: "Quel est le loyer maximum autorisé par l'encadrement des loyers pour un T2 à Bordeaux ?"
+    paraphrase_of: null
+    notes: "WHY: a renter checks a listing against the legal ceiling. Not loaded (no official machine-readable source). Expected: say so; the Carte des loyers indicator is not a legal ceiling."
+    sql: null
+
+  - id: trn-030
+    category: unanswerable
+    difficulty: easy
+    expected_behavior: unanswerable
+    question: "Y a-t-il beaucoup de bruit d'avions près de l'aéroport de Mérignac ?"
+    paraphrase_of: null
+    notes: "WHY: a relocated worker fears noise. No noise data is loaded. Expected: say so."
+    sql: null
+
+  - id: trn-031
+    category: unanswerable
+    difficulty: easy
+    expected_behavior: unanswerable
+    question: "Y a-t-il des médecins et des commerces près du 1 place de la Victoire ?"
+    paraphrase_of: null
+    notes: "WHY: daily life matters. No facilities data is loaded yet. Expected: say so."
+    sql: null
+
+  - id: trn-032
+    category: ambiguous
+    difficulty: medium
+    expected_behavior: clarify
+    question: "Quelle est la meilleure commune pour une famille en Gironde ?"
+    paraphrase_of: null
+    notes: "WHY: a broad first question. 'Meilleure' depends on budget, workplaces, school criteria. Expected: ask for the criteria."
+    sql: null
+
+  - id: trn-033
+    category: ambiguous
+    difficulty: medium
+    expected_behavior: clarify
+    question: "Je cherche un appartement pas cher près d'une bonne école."
+    paraphrase_of: null
+    notes: "WHY: a typical first message. Missing budget, place, type of school; 'bonne' is undefined (IPS is not quality). Expected: ask."
+    sql: null

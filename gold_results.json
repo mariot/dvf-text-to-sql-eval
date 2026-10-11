@@ -1,5 +1,5 @@
 {
- "eval_version": "1.2",
+ "eval_version": "1.3",
  "dvf_release": "2026-04",
  "results": {
   "agg-01": {
@@ -188,6 +188,48 @@
     ]
    ]
   },
+  "bud-01": {
+   "columns": [
+    "prix_m2_median",
+    "surface_m2",
+    "nb_ventes"
+   ],
+   "rows": [
+    [
+     3456.0,
+     72.0,
+     745
+    ]
+   ]
+  },
+  "bud-02": {
+   "columns": [
+    "loyer_m2",
+    "loyer_mensuel_estime"
+   ],
+   "rows": [
+    [
+     18.4,
+     368.0
+    ]
+   ]
+  },
+  "bud-03": {
+   "columns": [
+    "loyer_m2",
+    "prix_m2_median",
+    "nb_ventes",
+    "rendement_brut_pct"
+   ],
+   "rows": [
+    [
+     15.56,
+     3900.0,
+     413,
+     4.8
+    ]
+   ]
+  },
   "dq-01": {
    "columns": [
     "valeur_moyenne"
@@ -289,6 +331,194 @@
     [
      4331.0,
      1899
+    ]
+   ]
+  },
+  "fam-01": {
+   "columns": [
+    "nom_commune",
+    "part_adresses_pct",
+    "prix_median_maison",
+    "nb_ventes"
+   ],
+   "rows": [
+    [
+     "Ambès",
+     50.3,
+     194690.0,
+     27
+    ],
+    [
+     "Bassens",
+     57.5,
+     235500.0,
+     50
+    ],
+    [
+     "Lormont",
+     73.1,
+     242550.0,
+     75
+    ],
+    [
+     "Cenon",
+     65.6,
+     262500.0,
+     118
+    ],
+    [
+     "Floirac",
+     71.7,
+     275000.0,
+     88
+    ],
+    [
+     "Parempuyre",
+     54.5,
+     291130.0,
+     87
+    ],
+    [
+     "Eysines",
+     51.3,
+     314500.0,
+     174
+    ],
+    [
+     "Bègles",
+     89.1,
+     350000.0,
+     209
+    ],
+    [
+     "Mérignac",
+     53.8,
+     380000.0,
+     380
+    ],
+    [
+     "Talence",
+     67.9,
+     390000.0,
+     214
+    ],
+    [
+     "Bruges",
+     76.6,
+     410250.0,
+     114
+    ],
+    [
+     "Bordeaux",
+     93.9,
+     476895.0,
+     1084
+    ],
+    [
+     "Le Bouscat",
+     89.8,
+     490000.0,
+     203
+    ]
+   ]
+  },
+  "fam-02": {
+   "columns": [
+    "college",
+    "statut",
+    "minutes_a_pied"
+   ],
+   "rows": [
+    [
+     "Collège privé Le Mirail",
+     "Privé",
+     5.3
+    ]
+   ]
+  },
+  "fam-03": {
+   "columns": [
+    "nom_commune",
+    "nb_colleges",
+    "taux_reussite_moyen",
+    "valeur_ajoutee_moyenne"
+   ],
+   "rows": [
+    [
+     "Mérignac",
+     4,
+     90.0,
+     -0.8
+    ],
+    [
+     "Pessac",
+     4,
+     87.8,
+     -2.3
+    ]
+   ]
+  },
+  "his-01": {
+   "columns": [
+    "annee",
+    "variation_pct"
+   ],
+   "rows": [
+    [
+     1992,
+     -2.4
+    ],
+    [
+     1993,
+     -1.4
+    ],
+    [
+     1994,
+     -0.2
+    ],
+    [
+     1995,
+     -0.9
+    ],
+    [
+     1997,
+     -0.4
+    ],
+    [
+     2009,
+     -7.1
+    ],
+    [
+     2012,
+     -0.6
+    ],
+    [
+     2013,
+     -2.1
+    ],
+    [
+     2014,
+     -1.8
+    ],
+    [
+     2015,
+     -1.8
+    ]
+   ]
+  },
+  "inv-01": {
+   "columns": [
+    "annee",
+    "taux_vacance_pct",
+    "vacants",
+    "parc_prive"
+   ],
+   "rows": [
+    [
+     2025,
+     7.8,
+     11774,
+     150727
     ]
    ]
   },
@@ -1868,6 +2098,52 @@
      "5+",
      146,
      3788.0
+    ]
+   ]
+  },
+  "nrj-01": {
+   "columns": [
+    "nom_commune",
+    "part_f_g_pct",
+    "nb_dpe"
+   ],
+   "rows": [
+    [
+     "Le Taillan-Médoc",
+     0.0,
+     506
+    ],
+    [
+     "Martignas-sur-Jalle",
+     0.0,
+     501
+    ],
+    [
+     "Le Haillan",
+     0.2,
+     1932
+    ],
+    [
+     "Parempuyre",
+     0.3,
+     887
+    ],
+    [
+     "Artigues-près-Bordeaux",
+     0.4,
+     734
+    ]
+   ]
+  },
+  "nrj-02": {
+   "columns": [
+    "cout_annuel_median",
+    "nb_dpe"
+   ],
+   "rows": [
+    [
+     2145.0,
+     257
     ]
    ]
   },
@@ -3474,6 +3750,79 @@
     [
      2025,
      33379
+    ]
+   ]
+  },
+  "tra-01": {
+   "columns": [
+    "nom_commune",
+    "minutes_median",
+    "loyer_m2"
+   ],
+   "rows": [
+    [
+     "Cenon",
+     27.8,
+     14.17
+    ],
+    [
+     "Bègles",
+     23.2,
+     14.52
+    ],
+    [
+     "Talence",
+     28.0,
+     15.56
+    ],
+    [
+     "Bordeaux",
+     25.4,
+     15.99
+    ]
+   ]
+  },
+  "tra-02": {
+   "columns": [
+    "nom_commune",
+    "prix_m2_median",
+    "minutes_median",
+    "nb_ventes"
+   ],
+   "rows": [
+    [
+     "Le Haillan",
+     3689.0,
+     42.2,
+     79
+    ],
+    [
+     "Mérignac",
+     3949.0,
+     37.1,
+     380
+    ]
+   ]
+  },
+  "tra-03": {
+   "columns": [
+    "minutes"
+   ],
+   "rows": [
+    [
+     59.3
+    ]
+   ]
+  },
+  "una-01": {
+   "columns": [
+    "annee",
+    "loyer_m2"
+   ],
+   "rows": [
+    [
+     2025,
+     15.99
     ]
    ]
   }

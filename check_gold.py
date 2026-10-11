@@ -131,8 +131,20 @@ def main() -> int:
     ap.add_argument("--dsn", default=DEFAULT_DSN)
     ap.add_argument("--slow", type=float, default=3.0, help="flag queries slower than this (s)")
     ap.add_argument("--timeout", type=int, default=30)
+    ap.add_argument(
+        "--training",
+        action="store_true",
+        help="check dvf_training_questions.yaml: same checks except the eval's "
+        "consistency rules and cross-checks; snapshot training_gold_results.json",
+    )
     args = ap.parse_args()
 
+    if args.training:
+        if args.eval == HERE / "dvf_eval_questions.yaml":
+            args.eval = HERE / "dvf_training_questions.yaml"
+        if args.snapshot == HERE / "gold_results.json":
+            args.snapshot = HERE / "training_gold_results.json"
+        args.cross_checks = HERE / "no-cross-checks-for-training.yaml"
     spec = yaml.safe_load(args.eval.read_text())
     questions = spec["questions"]
     by_id = {q["id"]: q for q in questions}
@@ -213,7 +225,7 @@ def main() -> int:
                         flag("plausible", qid, f"{name}={v} outside [{lo}, {hi}] EUR/m2")
 
     # ---- consistency ----------------------------------------------------------------
-    rules = consistency_rules(R)
+    rules = [] if args.training else consistency_rules(R)
     for desc, rule in rules:
         try:
             ok = rule()

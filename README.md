@@ -10,13 +10,15 @@ ones, a **gold SQL query that was run and verified** against the data.
 | Questions | 143 (103 with gold SQL) |
 | Data | DVF géolocalisées (Etalab), DGFiP release **2026-04**, years 2021-2025 |
 | Scope | Gironde (department 33) |
-| Version | **eval-v1.2** (`eval_version: "1.2"` in the YAML, git tag `eval-v1.2`); see the changelog |
+| Version | **eval-v1.3** (`eval_version: "1.3"` in the YAML, git tag `eval-v1.3`); see the changelog |
 | Database | [`dvf-airflow-pipeline`](https://github.com/mariot/dvf-airflow-pipeline): PostgreSQL 16 + PostGIS, semantic layer `sql/semantic.sql` |
 
 ## Contents
 
 ```
 dvf_eval_questions.yaml   the eval set: questions, categories, conventions, gold SQL
+dvf_training_questions.yaml  training questions (home search), NEVER scored, kept apart
+training_gold_results.json   frozen gold results of the training set
 check_gold.py             runs every gold query and flags anything suspicious
 score.py                  scores a system's predictions against the gold answers
 cross_checks.yaml         independent second queries for the hardest questions
@@ -103,7 +105,7 @@ ones, e.g. a median returned without its sample size.
 
 The scorer reruns every gold query before scoring and stops if the database no
 longer reproduces `gold_results.json`, so a score always belongs to one eval
-version. Report it as "N/143 on eval-v1.2".
+version. Report it as "N/159 on eval-v1.3".
 
 ## How the gold answers were verified
 
@@ -152,12 +154,30 @@ snapshot. So:
 2. Re-freeze: `uv run check_gold.py --write-snapshot` (it refuses nothing, so
    review the diff of `gold_results.json`).
 3. Commit, then tag `eval-v<version>` and push the tag.
-4. Report every score with its eval version: "62/103 on eval-v1.2".
+4. Report every score with its eval version: "62/117 on eval-v1.3".
 
 A new DVF release (April / October) changes results even with identical SQL:
 `check_gold.py` then flags the snapshot, and that is a new version too.
 
 ## Changelog
+
+**v1.3** (dvf_release 2026-04). Home-search questions on the new housing and
+living-environment data of `dvf-airflow-pipeline` (rents, social housing,
+vacancy, schools, public transport, energy ratings, commute times, long
+series). They are asked the way future renters and buyers ask, to make a
+decision: families choosing schools, workers without a car, first-time
+buyers with a budget, students' parents, rental investors. Each note starts
+with WHY the person asks.
+- 16 new held-out questions (fam, tra, bud, nrj, inv, his, una-12, una-13,
+  amb-12) and una-01 ("Quel est le prix des loyers à Bordeaux ?") moves from
+  unanswerable to answer, with the caveats of the Carte des loyers.
+- 33 training questions in `dvf_training_questions.yaml`, never scored and
+  never overlapping the eval (`uv run check_gold.py --training`).
+- Questions on safety, noise, shops, waiting lists for social housing and
+  rent-control ceilings are unanswerable on purpose: the data doesn't hold
+  them and an assistant must say so.
+- No result of the 143 v1.2 questions changed (checked before freezing).
+
 
 **v1.2** (dvf_release 2026-04). Gold answers now follow the eval's own
 rounding conventions.
