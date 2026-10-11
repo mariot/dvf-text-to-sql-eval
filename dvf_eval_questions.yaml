@@ -63,7 +63,7 @@
 #       score; collège results = IVAC (value added).
 #     * Vacancy rate = vacants / parc_prive of the same LOVAC edition (2025 = latest with
 #       a stock; method break in 2025). DPE: passoire = F or G; dwelling statistics
-#       exclude type_batiment 'immeuble'. Long series: rates are fractions, answer in %.
+#       exclude type_batiment 'immeuble'; "DPE moyen" = median class. Long series: rates are fractions, answer in %.
 #   - "Terrain à bâtir" is ambiguous (VAT nature_mutation vs cadastral culture AB).
 #
 # Spatial questions marked with `lieux` use dvf.lieux (Place de la Bourse, Gare
@@ -72,7 +72,7 @@
 
 dvf_release: "2026-04"  # DGFiP release of April 2026 (Etalab geo-dvf files Last-Modified 2026-05-18); 2025 complete
 eval_today: "2026-10-15"
-eval_version: "1.3"     # bump on ANY gold change (SQL, conventions, categories); tag eval-v<version>
+eval_version: "1.4"     # bump on ANY gold change (SQL, conventions, categories); tag eval-v<version>
 questions:
   - id: sim-01
     category: simple
@@ -1917,13 +1917,19 @@ questions:
     sql: null
 
   - id: una-05
-    category: unanswerable
-    difficulty: easy
-    expected_behavior: unanswerable
+    category: aggregation
+    difficulty: medium
+    expected_behavior: answer
     question: "Quel est le DPE moyen des maisons vendues à Pessac ?"
     paraphrase_of: null
-    notes: "Energy ratings are not in DVF. Expected: explain the data does not contain this, without inventing a query."
-    sql: null
+    order_matters: false
+    notes: "WHY: a buyer wants to know what energy class to expect for a house in Pessac. v1.4: answerable since the ADEME DPE base was added. Convention: an energy class is ordinal, so 'moyen' = the median class (A < ... < G) of house certificates (type_batiment = 'maison'), with the number of certificates. In Pessac the median is D while the most frequent class is C. CAVEATS the answer must give: certificates cover diagnosed houses (sale, rental), not the houses sold in DVF, and cannot be linked to individual sales; certificates since July 2021 (current method); the distribution of classes is more telling than one class."
+    sql: |
+      SELECT percentile_disc(0.5) WITHIN GROUP (ORDER BY etiquette_dpe) AS classe_mediane,
+             count(*) AS nb_dpe
+      FROM dvf.dpe
+      WHERE code_commune = '33318'  -- Pessac
+        AND type_batiment = 'maison';
 
   - id: una-06
     category: unanswerable

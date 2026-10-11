@@ -7,10 +7,10 @@ ones, a **gold SQL query that was run and verified** against the data.
 
 | | |
 |---|---|
-| Questions | 143 (103 with gold SQL) |
+| Questions | 159 (118 with gold SQL) |
 | Data | DVF géolocalisées (Etalab), DGFiP release **2026-04**, years 2021-2025 |
 | Scope | Gironde (department 33) |
-| Version | **eval-v1.3** (`eval_version: "1.3"` in the YAML, git tag `eval-v1.3`); see the changelog |
+| Version | **eval-v1.4** (`eval_version: "1.4"` in the YAML, git tag `eval-v1.4`); see the changelog |
 | Database | [`dvf-airflow-pipeline`](https://github.com/mariot/dvf-airflow-pipeline): PostgreSQL 16 + PostGIS, semantic layer `sql/semantic.sql` |
 
 ## Contents
@@ -29,9 +29,9 @@ gold_results.json         frozen gold results of this version (drift detection)
 
 | category | expected_behavior | count |
 |---|---|---|
-| simple, aggregation, temporal, ranking, spatial, multi_step, data_quality, paraphrase | `answer` | 102 |
+| simple, aggregation, temporal, ranking, spatial, multi_step, data_quality, paraphrase | `answer` | 117 |
 | security (injection inside a legitimate question) | `answer` | 1 |
-| ambiguous | `clarify` | 14 |
+| ambiguous | `clarify` | 15 |
 | unanswerable | `unanswerable` | 12 |
 | security, privacy | `refuse` | 14 |
 
@@ -105,7 +105,7 @@ ones, e.g. a median returned without its sample size.
 
 The scorer reruns every gold query before scoring and stops if the database no
 longer reproduces `gold_results.json`, so a score always belongs to one eval
-version. Report it as "N/159 on eval-v1.3".
+version. Report it as "N/159 on eval-v1.4".
 
 ## How the gold answers were verified
 
@@ -154,12 +154,20 @@ snapshot. So:
 2. Re-freeze: `uv run check_gold.py --write-snapshot` (it refuses nothing, so
    review the diff of `gold_results.json`).
 3. Commit, then tag `eval-v<version>` and push the tag.
-4. Report every score with its eval version: "62/117 on eval-v1.3".
+4. Report every score with its eval version: "62/159 on eval-v1.4".
 
 A new DVF release (April / October) changes results even with identical SQL:
 `check_gold.py` then flags the snapshot, and that is a new version too.
 
 ## Changelog
+
+**v1.4** (dvf_release 2026-04). **una-05** ("Quel est le DPE moyen des maisons
+vendues à Pessac ?") moves from unanswerable to answer: since the ADEME DPE
+base was added, the data holds energy classes of diagnosed houses. An energy
+class is ordinal, so "moyen" = the median class (D in Pessac, 4 526 house
+certificates; the most frequent class is C). The answer must say that the
+certificates are not those of the houses sold and cannot be linked to DVF
+sales. No other result changed. Scores on v1.3 and v1.4 differ only on una-05.
 
 **v1.3** (dvf_release 2026-04). Home-search questions on the new housing and
 living-environment data of `dvf-airflow-pipeline` (rents, social housing,
