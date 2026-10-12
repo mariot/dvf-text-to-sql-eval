@@ -1,5 +1,5 @@
 {
- "eval_version": "1.6",
+ "eval_version": "1.7",
  "dvf_release": "2026-04",
  "results": {
   "agg-01": {
@@ -24,11 +24,11 @@
   },
   "agg-03": {
    "columns": [
-    "prix_m2_moyen"
+    "prix_m2_median"
    ],
    "rows": [
     [
-     4434.0
+     4408.0
     ]
    ]
   },
@@ -212,14 +212,24 @@
     ]
    ]
   },
-  "amb-11": {
+  "amb-08": {
    "columns": [
-    "prix_moyen",
     "nb_ventes"
    ],
    "rows": [
     [
-     651140.0,
+     10771
+    ]
+   ]
+  },
+  "amb-11": {
+   "columns": [
+    "prix_median",
+    "nb_ventes"
+   ],
+   "rows": [
+    [
+     272374.0,
      78
     ]
    ]
@@ -298,11 +308,11 @@
   },
   "dq-04": {
    "columns": [
-    "prix_m2_moyen"
+    "prix_m2_median"
    ],
    "rows": [
     [
-     4319.0
+     4217.0
     ]
    ]
   },
@@ -1206,6 +1216,12 @@
      29.8
     ],
     [
+     "Saint-Louis-de-Montferrand",
+     25,
+     60.0,
+     32.0
+    ],
+    [
      "Le Bouscat",
      422,
      37.2,
@@ -1218,10 +1234,34 @@
      55.5
     ],
     [
+     "Martignas-sur-Jalle",
+     91,
+     46.2,
+     23.1
+    ],
+    [
      "Eysines",
      388,
      31.4,
      48.2
+    ],
+    [
+     "Artigues-près-Bordeaux",
+     111,
+     38.7,
+     26.1
+    ],
+    [
+     "Lormont",
+     305,
+     22.3,
+     40.3
+    ],
+    [
+     "Bouliac",
+     43,
+     55.8,
+     11.6
     ],
     [
      "Blanquefort",
@@ -1242,10 +1282,22 @@
      17.8
     ],
     [
+     "Villenave-d'Ornon",
+     592,
+     38.0,
+     34.3
+    ],
+    [
      "Ambarès-et-Lagrave",
      237,
      51.9,
      13.9
+    ],
+    [
+     "Parempuyre",
+     142,
+     56.3,
+     17.6
     ],
     [
      "Pessac",
@@ -1260,10 +1312,34 @@
      14.1
     ],
     [
+     "Bruges",
+     367,
+     27.5,
+     46.3
+    ],
+    [
+     "Saint-Aubin-de-Médoc",
+     81,
+     49.4,
+     6.2
+    ],
+    [
+     "Carbon-Blanc",
+     93,
+     50.5,
+     17.2
+    ],
+    [
      "Ambès",
      42,
      38.1,
      45.2
+    ],
+    [
+     "Bassens",
+     89,
+     37.1,
+     31.5
     ],
     [
      "Talence",
@@ -1288,72 +1364,6 @@
      449,
      37.0,
      44.5
-    ],
-    [
-     "Saint-Louis-de-Montferrand",
-     25,
-     60.0,
-     32.0
-    ],
-    [
-     "Martignas-sur-Jalle",
-     91,
-     46.2,
-     23.1
-    ],
-    [
-     "Artigues-près-Bordeaux",
-     111,
-     38.7,
-     26.1
-    ],
-    [
-     "Lormont",
-     305,
-     22.3,
-     40.3
-    ],
-    [
-     "Bouliac",
-     43,
-     55.8,
-     11.6
-    ],
-    [
-     "Villenave-d'Ornon",
-     592,
-     38.0,
-     34.3
-    ],
-    [
-     "Parempuyre",
-     142,
-     56.3,
-     17.6
-    ],
-    [
-     "Bruges",
-     367,
-     27.5,
-     46.3
-    ],
-    [
-     "Saint-Aubin-de-Médoc",
-     81,
-     49.4,
-     6.2
-    ],
-    [
-     "Carbon-Blanc",
-     93,
-     50.5,
-     17.2
-    ],
-    [
-     "Bassens",
-     89,
-     37.1,
-     31.5
     ],
     [
      "Saint-Vincent-de-Paul",
@@ -3859,6 +3869,18 @@
     [
      2025,
      15.99
+    ]
+   ]
+  },
+  "una-03": {
+   "columns": [
+    "prix_m2_median",
+    "nb_ventes"
+   ],
+   "rows": [
+    [
+     4800.0,
+     2535
     ]
    ]
   },

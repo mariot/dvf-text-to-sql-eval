@@ -7,10 +7,10 @@ ones, a **gold SQL query that was run and verified** against the data.
 
 | | |
 |---|---|
-| Questions | 159 (121 with gold SQL) |
+| Questions | 159 (123 with gold SQL) |
 | Data | DVF géolocalisées (Etalab), DGFiP release **2026-04**, years 2021-2025 |
 | Scope | Gironde (department 33) |
-| Version | **eval-v1.6** (`eval_version: "1.6"` in the YAML, git tag `eval-v1.6`); see the changelog |
+| Version | **eval-v1.7** (`eval_version: "1.7"` in the YAML, git tag `eval-v1.7`); see the changelog |
 | Database | [`dvf-airflow-pipeline`](https://github.com/mariot/dvf-airflow-pipeline): PostgreSQL 16 + PostGIS, semantic layer `sql/semantic.sql` |
 
 ## Contents
@@ -29,10 +29,10 @@ gold_results.json         frozen gold results of this version (drift detection)
 
 | category | expected_behavior | count |
 |---|---|---|
-| simple, aggregation, temporal, ranking, spatial, multi_step, data_quality, paraphrase | `answer` | 120 |
+| simple, aggregation, temporal, ranking, spatial, multi_step, data_quality, paraphrase | `answer` | 122 |
 | security (injection inside a legitimate question) | `answer` | 1 |
-| ambiguous | `clarify` | 12 |
-| unanswerable | `unanswerable` | 12 |
+| ambiguous | `clarify` | 11 |
+| unanswerable | `unanswerable` | 11 |
 | security, privacy | `refuse` | 14 |
 
 Paraphrases (`paraphrase_of`) must return exactly the same result as their
@@ -107,7 +107,7 @@ ones, e.g. a median returned without its sample size.
 
 The scorer reruns every gold query before scoring and stops if the database no
 longer reproduces `gold_results.json`, so a score always belongs to one eval
-version. Report it as "N/159 on eval-v1.6".
+version. Report it as "N/159 on eval-v1.7".
 
 ## How the gold answers were verified
 
@@ -156,12 +156,34 @@ snapshot. So:
 2. Re-freeze: `uv run check_gold.py --write-snapshot` (it refuses nothing, so
    review the diff of `gold_results.json`).
 3. Commit, then tag `eval-v<version>` and push the tag.
-4. Report every score with its eval version: "62/159 on eval-v1.6".
+4. Report every score with its eval version: "62/159 on eval-v1.7".
 
 A new DVF release (April / October) changes results even with identical SQL:
 `check_gold.py` then flags the snapshot, and that is a new version too.
 
 ## Changelog
+
+**v1.7** (dvf_release 2026-04). Quartiers: `dvf-airflow-pipeline` now gives
+every sale its quartier (Bordeaux Métropole's "Quartier des communes") and
+`dvf.zones` can hold part of a commune.
+- **una-03** is reworded with a property type ("…des appartements dans le
+  quartier des Chartrons ?") and moves from unanswerable to answer: 4 800
+  EUR/m² over 2 535 sales, in the quartier "Chartrons / Grand Parc / Jardin
+  public", which the answer must say is wider than the Chartrons.
+- **amb-08** ("Combien de ventes sur la rive droite ?") moves from clarify to
+  answer: "Rive droite" is now defined as the GPV Rive Droite area (Bassens,
+  Cenon, Floirac, Lormont and Bordeaux's La Bastide): 10 771 sales.
+- **"Prix moyen" = the median.** For a price, a value or a price per m², a
+  house hunter asking for the "prix moyen" wants the typical price, and the
+  median is the one exceptional sales don't distort (Saint-Émilion: a 17.5 M
+  EUR estate pulls the mean to 651 140 EUR, the median is 272 374 EUR). The
+  answer may give the mean next to it (extra columns are allowed). agg-03:
+  4 434 -> 4 408 EUR/m²; dq-04: 4 319 -> 4 217 EUR/m² (now equal to agg-02);
+  amb-11: 651 140 -> 272 374 EUR. Other averages stay means: agg-12
+  (pièces) and dq-01 ("valeur moyenne d'une vente", a data-quality test of
+  the per-mutation average) are unchanged.
+- No other result changed (the semantic rebuild with the new columns was
+  checked against the v1.6 snapshot first).
 
 **v1.6** (dvf_release 2026-04). Clarification is strict, and the ambiguous
 questions no longer contradict the written conventions.

@@ -29,7 +29,11 @@
 #     row per real local (Gironde 2024: 14 371 raw Maison rows for 12 388 houses).
 #   - A mutation spanning several communes counts once, in its main property's commune
 #     (so commune counts add up to the department total). Same for code_postal.
-#   - "prix" without qualifier = median. Price statistics use vente_reference: exactly
+#   - "prix" without qualifier = median. v1.7: a "prix moyen" (price or price per m²)
+#     is the median too, robust to exceptional sales; the mean may be returned next to
+#     it. Other averages stay means (AVG): pièces, surfaces, and dq-01's "valeur
+#     moyenne d'une vente" (a data-quality test of the per-mutation average).
+#   - Price statistics use vente_reference: exactly
 #     one house or apartment (dépendances allowed, no commercial premises), nature Vente
 #     or VEFA, valeur_fonciere > 0. prix_m2 = valeur_fonciere / surface_reelle_bati.
 #   - Descriptive property statistics (surface, pièces) use dvf.biens; when counts and
@@ -73,7 +77,7 @@
 
 dvf_release: "2026-04"  # DGFiP release of April 2026 (Etalab geo-dvf files Last-Modified 2026-05-18); 2025 complete
 eval_today: "2026-10-15"
-eval_version: "1.6"     # bump on ANY gold change (SQL, conventions, categories); tag eval-v<version>
+eval_version: "1.7"     # bump on ANY gold change (SQL, conventions, categories); tag eval-v<version>
 questions:
   - id: sim-01
     category: simple
@@ -267,9 +271,9 @@ questions:
     question: "Quel est le prix moyen au m² des maisons à Pessac en 2023 ?"
     paraphrase_of: null
     order_matters: false
-    notes: "Explicitly 'moyen': use AVG, not median. AVG is sensitive to outliers (see agg-16)."
+    notes: "v1.7: a 'prix moyen' is the median (convention), robust to exceptional sales; v1.6 used AVG (4 434). The answer may give the mean next to it."
     sql: |
-      SELECT round(avg(prix_m2)) AS prix_m2_moyen
+      SELECT round(percentile_cont(0.5) WITHIN GROUP (ORDER BY prix_m2)) AS prix_m2_median
       FROM dvf.ventes
       WHERE code_commune = '33318'  -- Pessac
         AND annee = 2023 AND type_bien = 'Maison' AND prix_m2 IS NOT NULL;
@@ -1540,9 +1544,9 @@ questions:
     question: "Quel est le prix moyen au m² des appartements à Bordeaux en 2024, en excluant les ventes de plusieurs biens ?"
     paraphrase_of: null
     order_matters: false
-    notes: "Explicit version of the convention."
+    notes: "Explicit version of the convention (single-property sales). v1.7: a 'prix moyen' is the median, so the result equals agg-02; v1.6 used AVG (4 319). The answer may give the mean next to it."
     sql: |
-      SELECT round(avg(prix_m2)) AS prix_m2_moyen
+      SELECT round(percentile_cont(0.5) WITHIN GROUP (ORDER BY prix_m2)) AS prix_m2_median
       FROM dvf.ventes
       WHERE code_commune = '33063' AND annee = 2024 AND type_bien = 'Appartement'
         AND prix_m2 IS NOT NULL;
@@ -1852,13 +1856,19 @@ questions:
     sql: null
 
   - id: amb-08
-    category: ambiguous
+    category: spatial
     difficulty: medium
-    expected_behavior: clarify
+    expected_behavior: answer
     question: "Combien de ventes sur la rive droite ?"
     paraphrase_of: null
-    notes: "'Rive droite' is undefined in the data (communes? Bastide neighbourhood?)."
-    sql: null
+    order_matters: false
+    notes: "v1.7: moved from clarify to answer. dvf.zones now defines 'Rive droite' as the GPV Rive Droite area: Bassens, Cenon, Floirac, Lormont and Bordeaux's quartier La Bastide (zones can hold part of a commune). No year given = all years. Sales = est_vente. The answer should give the definition used (the term can also mean La Bastide alone or every right-bank commune)."
+    sql: |
+      SELECT count(*) AS nb_ventes
+      FROM dvf.ventes AS v
+      JOIN dvf.zones AS z
+        ON z.code_commune = v.code_commune AND (z.quartier IS NULL OR z.quartier = v.quartier)
+      WHERE z.zone = 'Rive droite' AND v.est_vente;
 
   - id: amb-09
     category: ambiguous
@@ -1885,9 +1895,9 @@ questions:
     question: "Le prix moyen des maisons à Saint-Émilion ?"
     paraphrase_of: null
     order_matters: false
-    notes: "v1.6: moved from clarify to answer. Only the year was missing: no year given = all years 2021-2025. Explicitly 'moyen' = AVG (as agg-03), total price (valeur_fonciere), single-house sales (vente_reference). CAVEATS the answer must give: 78 sales only, and one 17.5 M EUR sale (most likely a wine estate) pulls the mean to 651 140 EUR while the median is 272 374 EUR."
+    notes: "v1.6: moved from clarify to answer (no year given = all years 2021-2025). v1.7: a 'prix moyen' is the median (v1.6: AVG, 651 140 EUR). Total price (valeur_fonciere), single-house sales (vente_reference). CAVEATS the answer must give: 78 sales only; one 17.5 M EUR sale (most likely a wine estate) pulls the mean to 651 140 EUR, which is why the median is the figure to use."
     sql: |
-      SELECT round(avg(valeur_fonciere)) AS prix_moyen,
+      SELECT round(percentile_cont(0.5) WITHIN GROUP (ORDER BY valeur_fonciere)) AS prix_median,
              count(*) AS nb_ventes
       FROM dvf.ventes
       WHERE code_commune = '33394'  -- Saint-Émilion
@@ -1917,13 +1927,20 @@ questions:
     sql: null
 
   - id: una-03
-    category: unanswerable
+    category: aggregation
     difficulty: medium
-    expected_behavior: unanswerable
-    question: "Quel est le prix médian au m² dans le quartier des Chartrons ?"
+    expected_behavior: answer
+    question: "Quel est le prix médian au m² des appartements dans le quartier des Chartrons ?"
     paraphrase_of: null
-    notes: "No neighbourhood field (answerable only if you add quartier polygons). Expected: explain the data does not contain this, without inventing a query."
-    sql: null
+    order_matters: false
+    notes: "v1.7: reworded (v1.6 had no property type) and moved from unanswerable to answer: dvf.ventes.quartier now holds Bordeaux's quartiers. The Chartrons are part of the quartier 'Chartrons / Grand Parc / Jardin public'. No year given = all years. CAVEATS the answer must give: the figure covers the whole quartier, wider than the Chartrons."
+    sql: |
+      SELECT round(percentile_cont(0.5) WITHIN GROUP (ORDER BY prix_m2)) AS prix_m2_median,
+             count(*) AS nb_ventes
+      FROM dvf.ventes
+      WHERE code_commune = '33063'  -- Bordeaux
+        AND quartier = 'Chartrons / Grand Parc / Jardin public'
+        AND type_bien = 'Appartement' AND prix_m2 IS NOT NULL;
 
   - id: una-04
     category: unanswerable
