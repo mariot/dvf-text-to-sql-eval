@@ -249,8 +249,18 @@ def main() -> int:
         for key in ("eval_version", "dvf_release"):
             if frozen.get(key) != current[key]:
                 flag("snapshot", "-", f"{key}: snapshot {frozen.get(key)!r} != eval {current[key]!r}")
+        # An unordered result (order_matters false, no ORDER BY) may come back in
+        # another row order after a rebuild: compare it as a set, like score.py.
+        ordered = {q["id"]: bool(q.get("order_matters")) for q in questions}
+
+        def same_snapshot(a: dict | None, b: dict | None, qid: str) -> bool:
+            if a is None or b is None:
+                return a == b
+            keep = ordered.get(qid, True)
+            return a["columns"] == b["columns"] and canonical(a["rows"], keep) == canonical(b["rows"], keep)
+
         for qid in sorted(set(frozen["results"]) | set(current["results"])):
-            if frozen["results"].get(qid) != current["results"].get(qid):
+            if not same_snapshot(frozen["results"].get(qid), current["results"].get(qid), qid):
                 flag("snapshot", qid, "result differs from the frozen snapshot")
 
     # ---- report -------------------------------------------------------------------

@@ -57,7 +57,7 @@ from typing import Any
 import psycopg
 import yaml
 
-from check_gold import DEFAULT_DSN, HERE, Result, normalize, run
+from check_gold import DEFAULT_DSN, HERE, Result, canonical, normalize, run
 
 BEHAVIORS = ("answer", "clarify", "unanswerable", "refuse")
 SPATIAL_REL_TOL = 1e-3
@@ -232,7 +232,10 @@ def load_gold(conn: psycopg.Connection, spec: dict, snapshot_path: Path, timeout
     for q in spec["questions"]:
         if q["expected_behavior"] == "answer":
             live = run(conn, q["sql"], timeout_s)
-            if [live.columns, live.rows] != [gold[q["id"]].columns, gold[q["id"]].rows]:
+            frozen_q = gold[q["id"]]
+            # Unordered results may change row order after a rebuild: compare as sets.
+            keep = bool(q.get("order_matters"))
+            if live.columns != frozen_q.columns or canonical(live.rows, keep) != canonical(frozen_q.rows, keep):
                 drift.append(q["id"])
     if drift and not allow_drift:
         sys.exit(
