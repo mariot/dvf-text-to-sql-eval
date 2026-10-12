@@ -1,5 +1,5 @@
 {
- "eval_version": "1.5",
+ "eval_version": "1.6",
  "dvf_release": "2026-04",
  "results": {
   "agg-01": {
@@ -185,6 +185,42 @@
     [
      "Pessac",
      3495.0
+    ]
+   ]
+  },
+  "amb-02": {
+   "columns": [
+    "prix_median",
+    "nb_ventes"
+   ],
+   "rows": [
+    [
+     306330.0,
+     70345
+    ]
+   ]
+  },
+  "amb-06": {
+   "columns": [
+    "prix_m2_median",
+    "nb_ventes"
+   ],
+   "rows": [
+    [
+     4167.0,
+     4833
+    ]
+   ]
+  },
+  "amb-11": {
+   "columns": [
+    "prix_moyen",
+    "nb_ventes"
+   ],
+   "rows": [
+    [
+     651140.0,
+     78
     ]
    ]
   },

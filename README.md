@@ -7,10 +7,10 @@ ones, a **gold SQL query that was run and verified** against the data.
 
 | | |
 |---|---|
-| Questions | 159 (118 with gold SQL) |
+| Questions | 159 (121 with gold SQL) |
 | Data | DVF géolocalisées (Etalab), DGFiP release **2026-04**, years 2021-2025 |
 | Scope | Gironde (department 33) |
-| Version | **eval-v1.5** (`eval_version: "1.5"` in the YAML, git tag `eval-v1.5`); see the changelog |
+| Version | **eval-v1.6** (`eval_version: "1.6"` in the YAML, git tag `eval-v1.6`); see the changelog |
 | Database | [`dvf-airflow-pipeline`](https://github.com/mariot/dvf-airflow-pipeline): PostgreSQL 16 + PostGIS, semantic layer `sql/semantic.sql` |
 
 ## Contents
@@ -29,9 +29,9 @@ gold_results.json         frozen gold results of this version (drift detection)
 
 | category | expected_behavior | count |
 |---|---|---|
-| simple, aggregation, temporal, ranking, spatial, multi_step, data_quality, paraphrase | `answer` | 117 |
+| simple, aggregation, temporal, ranking, spatial, multi_step, data_quality, paraphrase | `answer` | 120 |
 | security (injection inside a legitimate question) | `answer` | 1 |
-| ambiguous | `clarify` | 15 |
+| ambiguous | `clarify` | 12 |
 | unanswerable | `unanswerable` | 12 |
 | security, privacy | `refuse` | 14 |
 
@@ -107,7 +107,7 @@ ones, e.g. a median returned without its sample size.
 
 The scorer reruns every gold query before scoring and stops if the database no
 longer reproduces `gold_results.json`, so a score always belongs to one eval
-version. Report it as "N/159 on eval-v1.5".
+version. Report it as "N/159 on eval-v1.6".
 
 ## How the gold answers were verified
 
@@ -156,12 +156,26 @@ snapshot. So:
 2. Re-freeze: `uv run check_gold.py --write-snapshot` (it refuses nothing, so
    review the diff of `gold_results.json`).
 3. Commit, then tag `eval-v<version>` and push the tag.
-4. Report every score with its eval version: "62/159 on eval-v1.5".
+4. Report every score with its eval version: "62/159 on eval-v1.6".
 
 A new DVF release (April / October) changes results even with identical SQL:
 `check_gold.py` then flags the snapshot, and that is a new version too.
 
 ## Changelog
+
+**v1.6** (dvf_release 2026-04). Clarification is strict, and the ambiguous
+questions no longer contradict the written conventions.
+- A `clarify` question passes only if the system asks. Answering with stated
+  assumptions is reported separately, never passed. The notes of amb-01 and
+  amb-12 said "decide which counts as a pass": this is the decision.
+- **amb-02**, **amb-06** and **amb-11** move to answer. What they left open is
+  settled by the conventions ("no year given = all years", "prix" = median,
+  "moyen" = mean), so a system that follows them could never pass. Gold:
+  amb-02 306 330 EUR (median house price, 70 345 sales), amb-06 4 167 EUR/m²
+  (Bordeaux T3, 4 833 sales), amb-11 651 140 EUR (mean house price in
+  Saint-Émilion, 78 sales; one 17.5 M EUR sale, the answer must warn that the
+  median is 272 374 EUR).
+- No other result changed. Scores on v1.5 and v1.6 differ only on these three.
 
 **v1.5** (dvf_release 2026-04). Scorer only, no gold result changed. Ordered
 results may list tied rows in any order: rnk-01 and par-06 have Bègles and

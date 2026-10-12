@@ -7,7 +7,8 @@
 #   difficulty       easy | medium | hard  (your estimate; revise after the baseline run)
 #   expected_behavior
 #                    answer        -> the system must return the same result as `sql`
-#                    clarify       -> the system must ask a question (or state assumptions)
+#                    clarify       -> the system must ask a question (v1.6: answering with stated
+#                                     assumptions is reported, never passed)
 #                    unanswerable  -> the system must say the data cannot answer
 #                    refuse        -> the system must refuse; nothing may execute
 #   paraphrase_of    id of the reference question (same expected result), or null
@@ -72,7 +73,7 @@
 
 dvf_release: "2026-04"  # DGFiP release of April 2026 (Etalab geo-dvf files Last-Modified 2026-05-18); 2025 complete
 eval_today: "2026-10-15"
-eval_version: "1.5"     # bump on ANY gold change (SQL, conventions, categories); tag eval-v<version>
+eval_version: "1.6"     # bump on ANY gold change (SQL, conventions, categories); tag eval-v<version>
 questions:
   - id: sim-01
     category: simple
@@ -1782,17 +1783,22 @@ questions:
     expected_behavior: clarify
     question: "Quel est le prix moyen à Bordeaux ?"
     paraphrase_of: null
-    notes: "Missing: property type, year, total price vs per m². Expected: ask a clarifying question, or answer with explicitly stated assumptions. Decide which counts as a pass."
+    notes: "Missing: property type, year, total price vs per m². Expected: ask a clarifying question (v1.6: answering with stated assumptions is reported, not passed)."
     sql: null
 
   - id: amb-02
-    category: ambiguous
+    category: aggregation
     difficulty: medium
-    expected_behavior: clarify
+    expected_behavior: answer
     question: "Combien coûte une maison en Gironde ?"
     paraphrase_of: null
-    notes: "Missing: year; mean vs median. Expected: ask a clarifying question, or answer with explicitly stated assumptions. Decide which counts as a pass."
-    sql: null
+    order_matters: false
+    notes: "v1.6: moved from clarify to answer. The conventions settle what was missing: no year given = all years 2021-2025, and 'prix' without qualifier = median. Total price (valeur_fonciere) of single-house sales (vente_reference), as agg-01. The answer should say prices differ widely across Gironde."
+    sql: |
+      SELECT round(percentile_cont(0.5) WITHIN GROUP (ORDER BY valeur_fonciere)) AS prix_median,
+             count(*) AS nb_ventes
+      FROM dvf.ventes
+      WHERE type_bien = 'Maison' AND vente_reference;
 
   - id: amb-03
     category: ambiguous
@@ -1822,13 +1828,19 @@ questions:
     sql: null
 
   - id: amb-06
-    category: ambiguous
+    category: aggregation
     difficulty: easy
-    expected_behavior: clarify
+    expected_behavior: answer
     question: "Prix au m² des T3 à Bordeaux ?"
     paraphrase_of: null
-    notes: "Year missing. Defaulting to the latest complete year with a stated assumption may be acceptable."
-    sql: null
+    order_matters: false
+    notes: "v1.6: moved from clarify to answer. Only the year was missing, and the convention settles it: no year given = all years 2021-2025. 'Prix' = median; T3 = apartment with 3 pièces principales (as agg-07)."
+    sql: |
+      SELECT round(percentile_cont(0.5) WITHIN GROUP (ORDER BY prix_m2)) AS prix_m2_median,
+             count(*) AS nb_ventes
+      FROM dvf.ventes
+      WHERE code_commune = '33063'  -- Bordeaux
+        AND type_bien = 'Appartement' AND nombre_pieces = 3 AND prix_m2 IS NOT NULL;
 
   - id: amb-07
     category: ambiguous
@@ -1867,13 +1879,19 @@ questions:
     sql: null
 
   - id: amb-11
-    category: ambiguous
-    difficulty: easy
-    expected_behavior: clarify
+    category: aggregation
+    difficulty: medium
+    expected_behavior: answer
     question: "Le prix moyen des maisons à Saint-Émilion ?"
     paraphrase_of: null
-    notes: "Year missing; small sample, answer should warn about reliability."
-    sql: null
+    order_matters: false
+    notes: "v1.6: moved from clarify to answer. Only the year was missing: no year given = all years 2021-2025. Explicitly 'moyen' = AVG (as agg-03), total price (valeur_fonciere), single-house sales (vente_reference). CAVEATS the answer must give: 78 sales only, and one 17.5 M EUR sale (most likely a wine estate) pulls the mean to 651 140 EUR while the median is 272 374 EUR."
+    sql: |
+      SELECT round(avg(valeur_fonciere)) AS prix_moyen,
+             count(*) AS nb_ventes
+      FROM dvf.ventes
+      WHERE code_commune = '33394'  -- Saint-Émilion
+        AND type_bien = 'Maison' AND vente_reference;
 
   - id: una-01
     category: aggregation
@@ -2377,5 +2395,5 @@ questions:
     expected_behavior: clarify
     question: "Vaut-il mieux acheter ou louer à Bordeaux ?"
     paraphrase_of: null
-    notes: "WHY: the classic first decision. It depends on how long they stay, their down payment and loan rate. Expected: ask, or answer with explicitly stated assumptions (e.g. price-to-rent ratio)."
+    notes: "WHY: the classic first decision. It depends on how long they stay, their down payment and loan rate. Expected: ask (v1.6: answering with stated assumptions, e.g. a price-to-rent ratio, is reported, not passed)."
     sql: null
