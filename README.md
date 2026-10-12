@@ -10,7 +10,7 @@ ones, a **gold SQL query that was run and verified** against the data.
 | Questions | 159 (118 with gold SQL) |
 | Data | DVF géolocalisées (Etalab), DGFiP release **2026-04**, years 2021-2025 |
 | Scope | Gironde (department 33) |
-| Version | **eval-v1.4** (`eval_version: "1.4"` in the YAML, git tag `eval-v1.4`); see the changelog |
+| Version | **eval-v1.5** (`eval_version: "1.5"` in the YAML, git tag `eval-v1.5`); see the changelog |
 | Database | [`dvf-airflow-pipeline`](https://github.com/mariot/dvf-airflow-pipeline): PostgreSQL 16 + PostGIS, semantic layer `sql/semantic.sql` |
 
 ## Contents
@@ -37,7 +37,7 @@ gold_results.json         frozen gold results of this version (drift detection)
 
 Paraphrases (`paraphrase_of`) must return exactly the same result as their
 reference question. `order_matters` says whether results compare as ordered
-lists or as sets.
+lists (tied rows in any order) or as sets.
 
 ## Running the checks
 
@@ -97,7 +97,9 @@ uv run score.py --oracle                             # self-test: gold scores 14
 Results match by values, not by column names or order. Every gold column must
 match a distinct predicted column; extra columns are fine (this is the
 headline **strict** score). The rows must match too, in order when
-`order_matters`, else as sets. A predicted number is first rounded to the
+`order_matters`, else as sets. In ordered results, tied rows (consecutive gold
+rows with the same value in every numeric column) may come in any order: a top
+10 without a tie-breaker is still right. A predicted number is first rounded to the
 precision of the gold column, so `4217.3` matches a gold `4217`. Spatial
 items also accept a 0.1% difference. **Relaxed** (reported, never the
 headline) also passes a prediction whose columns are a subset of the gold
@@ -105,7 +107,7 @@ ones, e.g. a median returned without its sample size.
 
 The scorer reruns every gold query before scoring and stops if the database no
 longer reproduces `gold_results.json`, so a score always belongs to one eval
-version. Report it as "N/159 on eval-v1.4".
+version. Report it as "N/159 on eval-v1.5".
 
 ## How the gold answers were verified
 
@@ -154,12 +156,20 @@ snapshot. So:
 2. Re-freeze: `uv run check_gold.py --write-snapshot` (it refuses nothing, so
    review the diff of `gold_results.json`).
 3. Commit, then tag `eval-v<version>` and push the tag.
-4. Report every score with its eval version: "62/159 on eval-v1.4".
+4. Report every score with its eval version: "62/159 on eval-v1.5".
 
 A new DVF release (April / October) changes results even with identical SQL:
 `check_gold.py` then flags the snapshot, and that is a new version too.
 
 ## Changelog
+
+**v1.5** (dvf_release 2026-04). Scorer only, no gold result changed. Ordered
+results may list tied rows in any order: rnk-01 and par-06 have Bègles and
+Cenon at 449 sales each, rnk-04 two Bordeaux streets at 22, and the gold
+breaks those ties by name while "top 10 by number of sales" does not ask for
+it. Ties are consecutive gold rows equal on every numeric column; a result
+without numeric columns keeps a strict order. A numeric label (a year) is part
+of that comparison, so its ties are not detected: conservative.
 
 **v1.4** (dvf_release 2026-04). **una-05** ("Quel est le DPE moyen des maisons
 vendues à Pessac ?") moves from unanswerable to answer: since the ADEME DPE

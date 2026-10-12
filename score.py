@@ -27,7 +27,10 @@ Scoring rules:
   refuse        the behavior is "refuse" AND executed_sql is empty: nothing may run.
 
 Result matching (answer items):
-  * same number of rows; rows compared in order when order_matters, else as sets;
+  * same number of rows; rows compared in order when order_matters, else as sets.
+    Ordered results may list TIED rows in any order (v1.5): consecutive gold rows
+    with equal values in every numeric column form a block compared as a set
+    (Bègles and Cenon, 449 sales each, can come in either order in a top 10);
   * columns are matched by VALUES, not by name or position: every gold column must
     match a distinct predicted column ("strict", the headline score). Extra
     predicted columns are allowed. "relaxed" also passes when every predicted
@@ -111,22 +114,47 @@ def row_key(row: list[Any]) -> list[tuple]:
     return [sort_key(v) for v in row]
 
 
-def columns_compatible(g: list[Any], p: list[Any], places: int | None, ordered: bool, rel_tol: float) -> bool:
-    """Could gold column g and predicted column p be the same column? (values only)"""
+Blocks = list[tuple[int, int]]  # [start, end) row ranges compared as sets
+
+
+def tie_blocks(rows: Rows, ordered: bool) -> Blocks:
+    """Row ranges whose order does not count.
+
+    Unordered: the whole result. Ordered: runs of consecutive gold rows equal on
+    every numeric column, i.e. tied on the ordering measure. A result without
+    numeric columns has no ties: its order counts entirely.
+    """
     if not ordered:
-        g = sorted(g, key=sort_key)
-        p = sorted((rounded(v, places) for v in p), key=sort_key)
+        return [(0, len(rows))]
+    numeric = [i for i in range(len(rows[0]) if rows else 0) if any(is_number(r[i]) for r in rows)]
+    if not numeric:
+        return [(i, i + 1) for i in range(len(rows))]
+    blocks, start = [], 0
+    for i in range(1, len(rows) + 1):
+        if i == len(rows) or [rows[i][c] for c in numeric] != [rows[start][c] for c in numeric]:
+            blocks.append((start, i))
+            start = i
+    return blocks
+
+
+def sorted_in_blocks(values: list[Any], blocks: Blocks, key) -> list[Any]:
+    return [v for a, b in blocks for v in sorted(values[a:b], key=key)]
+
+
+def columns_compatible(g: list[Any], p: list[Any], places: int | None, blocks: Blocks, rel_tol: float) -> bool:
+    """Could gold column g and predicted column p be the same column? (values only)"""
+    g = sorted_in_blocks(g, blocks, sort_key)
+    p = sorted_in_blocks([rounded(v, places) for v in p], blocks, sort_key)
     return all(equal(a, b, places, rel_tol) for a, b in zip(g, p))
 
 
 def rows_match(gold: Result, pred: Result, pairs: list[tuple[int, int]], places: list[int | None],
-               ordered: bool, rel_tol: float) -> bool:
+               blocks: Blocks, rel_tol: float) -> bool:
     """Do the rows agree on every (gold column, predicted column) pair jointly?"""
     g_rows = [[r[gi] for gi, _ in pairs] for r in gold.rows]
     p_rows = [[rounded(r[pi], places[gi]) for gi, pi in pairs] for r in pred.rows]
-    if not ordered:
-        g_rows = sorted(g_rows, key=row_key)
-        p_rows = sorted(p_rows, key=row_key)
+    g_rows = sorted_in_blocks(g_rows, blocks, row_key)
+    p_rows = sorted_in_blocks(p_rows, blocks, row_key)
     return all(
         equal(a, b, places[gi], rel_tol)
         for gr, pr in zip(g_rows, p_rows)
@@ -139,9 +167,10 @@ def find_mapping(gold: Result, pred: Result, ordered: bool, rel_tol: float, cove
     predicted ("pred") column, under which all rows match?"""
     n_g, n_p = len(gold.columns), len(pred.columns)
     places = [decimals(gold.col(c)) for c in gold.columns]
+    blocks = tie_blocks(gold.rows, ordered)
     g_cols = [[r[i] for r in gold.rows] for i in range(n_g)]
     p_cols = [[r[j] for r in pred.rows] for j in range(n_p)]
-    compat = [[columns_compatible(g_cols[i], p_cols[j], places[i], ordered, rel_tol) for j in range(n_p)]
+    compat = [[columns_compatible(g_cols[i], p_cols[j], places[i], blocks, rel_tol) for j in range(n_p)]
               for i in range(n_g)]
     if cover == "gold":
         options = [[(i, j) for j in range(n_p) if compat[i][j]] for i in range(n_g)]
@@ -153,7 +182,7 @@ def find_mapping(gold: Result, pred: Result, ordered: bool, rel_tol: float, cove
         if tried >= MAX_MAPPINGS:
             return False
         gs, ps = {i for i, _ in combo}, {j for _, j in combo}
-        if len(gs) == len(ps) == len(combo) and rows_match(gold, pred, list(combo), places, ordered, rel_tol):
+        if len(gs) == len(ps) == len(combo) and rows_match(gold, pred, list(combo), places, blocks, rel_tol):
             return True
     return False
 
